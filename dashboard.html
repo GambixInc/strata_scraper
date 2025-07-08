@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SEO & Analytics Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .dashboard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #4a4a8a;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        .site-selector {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .site-selector select {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 16px;
+            background: white;
+            transition: border-color 0.3s ease;
+        }
+
+        .site-selector select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .card-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-size: 24px;
+            color: white;
+        }
+
+        .card-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #4a4a8a;
+        }
+
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .metric {
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 15px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .metric-label {
+            font-size: 0.9rem;
+            color: #666;
+            font-weight: 500;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin: 20px 0;
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin: 5px;
+        }
+
+        .status-good {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .analytics-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .analytics-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            margin-bottom: 10px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .analytics-item:hover {
+            background: #e9ecef;
+        }
+
+        .analytics-name {
+            font-weight: 600;
+            color: #4a4a8a;
+        }
+
+        .analytics-value {
+            font-weight: 500;
+            color: #667eea;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .loading i {
+            font-size: 2rem;
+            margin-bottom: 15px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            text-align: center;
+            padding: 40px;
+            color: #721c24;
+            background: #f8d7da;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        .recommendations {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .recommendations .card-header {
+            border-bottom-color: rgba(255,255,255,0.2);
+        }
+
+        .recommendations .card-title {
+            color: white;
+        }
+
+        .recommendation-item {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 10px;
+            border-left: 4px solid rgba(255,255,255,0.3);
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+            .metric-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="header">
+            <h1><i class="fas fa-chart-line"></i> SEO & Analytics Dashboard</h1>
+            <p>Comprehensive analysis and insights for your scraped websites</p>
+        </div>
+
+        <div class="site-selector">
+            <label for="siteSelect"><strong>Select Scraped Site:</strong></label>
+            <select id="siteSelect">
+                <option value="">Loading sites...</option>
+            </select>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                        <i class="fas fa-search"></i>
+                    </div>
+                    <div class="card-title">SEO Overview</div>
+                </div>
+                <div id="seoOverview" class="loading">
+                    <i class="fas fa-spinner"></i>
+                    <p>Loading SEO data...</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon" style="background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);">
+                        <i class="fas fa-tachometer-alt"></i>
+                    </div>
+                    <div class="card-title">Performance Metrics</div>
+                </div>
+                <div id="performanceMetrics" class="loading">
+                    <i class="fas fa-spinner"></i>
+                    <p>Loading performance data...</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon" style="background: linear-gradient(135deg, #17a2b8 0%, #6f42c1 100%);">
+                        <i class="fas fa-file-alt"></i>
+                    </div>
+                    <div class="card-title">Content Analysis</div>
+                </div>
+                <div id="contentAnalysis" class="loading">
+                    <i class="fas fa-spinner"></i>
+                    <p>Loading content data...</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon" style="background: linear-gradient(135deg, #dc3545 0%, #e83e8c 100%);">
+                        <i class="fas fa-chart-bar"></i>
+                    </div>
+                    <div class="card-title">Analytics Tracking</div>
+                </div>
+                <div id="analyticsTracking" class="loading">
+                    <i class="fas fa-spinner"></i>
+                    <p>Loading analytics data...</p>
+                </div>
+            </div>
+
+            <div class="card full-width">
+                <div class="card-header">
+                    <div class="card-icon" style="background: linear-gradient(135deg, #6f42c1 0%, #e83e8c 100%);">
+                        <i class="fas fa-chart-pie"></i>
+                    </div>
+                    <div class="card-title">SEO Score Breakdown</div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="seoScoreChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card full-width recommendations">
+                <div class="card-header">
+                    <div class="card-icon" style="background: rgba(255,255,255,0.2);">
+                        <i class="fas fa-lightbulb"></i>
+                    </div>
+                    <div class="card-title">Recommendations</div>
+                </div>
+                <div id="recommendations" class="loading">
+                    <i class="fas fa-spinner"></i>
+                    <p>Generating recommendations...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Mock data loading
+        async function fetchReport(site, type) {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    if (type === 'analysis') {
+                        resolve(JSON.parse(`
+                            {
+                                "original_url": "https://www.uvicorn.org/",
+                                "scraped_at": "2025-06-26T22:00:16.796092",
+                                "title": "Uvicorn",
+                                "stats": {
+                                    "links_count": 126,
+                                    "inline_styles_count": 0,
+                                    "internal_stylesheets_count": 3,
+                                    "external_stylesheets_count": 3,
+                                    "inline_scripts_count": 8,
+                                    "external_scripts_count": 1
+                                },
+                                "seo_metadata": {
+                                    "meta_tags": {
+                                        "viewport": "width=device-width,initial-scale=1",
+                                        "description": "The lightning-fast ASGI server.",
+                                        "generator": "mkdocs-1.6.1, mkdocs-material-9.6.13"
+                                    },
+                                    "open_graph": {},
+                                    "twitter_cards": {},
+                                    "structured_data": [],
+                                    "headings": {
+                                        "h1": ["Introduction"],
+                                        "h2": ["Quickstart", "Usage", "The ASGI interface", "Why ASGI?", "Alternative ASGI servers", "ASGI frameworks"],
+                                        "h3": ["Command line options", "Running programmatically", "Running with Gunicorn", "Application factories", "HTTP Scope", "HTTP Messages", "Requests & responses", "Reading the request body", "Streaming responses", "Daphne", "Hypercorn", "Starlette", "Django Channels", "Quart", "FastAPI", "BlackSheep", "Falcon", "Muffin", "Litestar", "Panther"],
+                                        "h4": ["uvicorn.run", "Config and Server instances"],
+                                        "h5": [],
+                                        "h6": []
+                                    },
+                                    "images": [
+                                        {"src": "uvicorn.png", "alt": "logo"},
+                                        {"src": "https://github.com/encode/uvicorn/workflows/Test%20Suite/badge.svg", "alt": "Test Suite"}
+                                    ],
+                                    "internal_links": [],
+                                    "external_links": []
+                                },
+                                "page_speed_indicators": {
+                                    "total_images": 6,
+                                    "images_without_alt": 0,
+                                    "total_scripts": 9,
+                                    "total_stylesheets": 3,
+                                    "inline_styles": 0,
+                                    "total_links": 126
+                                },
+                                "word_count": 2524,
+                                "top_keywords": {
+                                    "uvicorn": 4,
+                                    "server": 3,
+                                    "asgi": 3
+                                }
+                            }
+                        `)); // Content from metadata.json and seo_report.txt combined
+                    } else if (type === 'analytics') {
+                        resolve(JSON.parse(`
+                            {
+                                "detailed_analytics": {
+                                    "google_analytics": [
+                                        {
+                                            "type": "google_analytics",
+                                            "version": "GA4",
+                                            "tracking_id": null,
+                                            "measurement_id": "G-KTS6TXPD85",
+                                            "content_preview": "function __md_analytics(){function e(){dataLayer.push(arguments)}window.dataLayer=window.dataLayer||[],e(\\"js\\",new Date),e(\\"config\\",\\"G-KTS6TXPD85\\"),document.addEventListener(\\"DOMContentLoaded\\",(functio...",
+                                            "src": ""
+                                        }
+                                    ],
+                                    "facebook_pixel": [],
+                                    "google_tag_manager": [],
+                                    "hotjar": [],
+                                    "mixpanel": [],
+                                    "other_tracking": [],
+                                    "social_media_tracking": [],
+                                    "ecommerce_tracking": []
+                                }
+                            }
+                        `)); // Content from metadata.json
+                    } else {
+                        resolve(null);
+                    }
+                }, 500);
+            });
+        }
+
+        async function fetchSites() {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve(['https://www.uvicorn.org/']);
+                }, 200);
+            });
+        }
+
+        function showError(elementId, message) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.innerHTML = `<div class="error"><i class="fas fa-exclamation-triangle"></i><p>${message}</p></div>`;
+            }
+        }
+
+        function renderSEOOverview(analysis) {
+            const seoOverviewDiv = document.getElementById('seoOverview');
+            if (!seoOverviewDiv) return;
+
+            try {
+                const basicInfo = analysis.seo_metadata;
+                const metaTags = basicInfo.meta_tags;
+
+                let html = '<h4>Basic Information</h4>';
+                html += '<div class="metric-grid">';
+                html += `<div class="metric"><div class="metric-value">${analysis.title || 'N/A'}</div><div class="metric-label">Title</div></div>`;
+                html += `<div class="metric"><div class="metric-value"><a href="${analysis.original_url || '#'}" target="_blank">View Site</a></div><div class="metric-label">Canonical URL</div></div>`;
+                html += `<div class="metric"><div class="metric-value">${metaTags.description || 'N/A'}</div><div class="metric-label">Description</div></div>`;
+                html += `<div class="metric"><div class="metric-value">${metaTags.viewport || 'N/A'}</div><div class="metric-label">Viewport</div></div>`;
+                html += '</div>';
+
+                html += '<h4>Meta Tags</h4>';
+                html += '<div class="analytics-list">';
+                for (const tag in metaTags) {
+                    html += `<div class="analytics-item"><span class="analytics-name">${tag.replace(/_/g, ' ')}</span><span class="analytics-value">${metaTags[tag]}</span></div>`;
+                }
+                html += '</div>';
+                seoOverviewDiv.innerHTML = html;
+            } catch (error) {
+                console.error('Error rendering SEO Overview:', error);
+                showError('seoOverview', 'Error loading SEO Overview data.');
+            }
+        }
+
+        function renderPerformanceMetrics(analysis) {
+            const performanceMetricsDiv = document.getElementById('performanceMetrics');
+            if (!performanceMetricsDiv) return;
+
+            try {
+                const pageSpeed = analysis.page_speed_indicators;
+
+                if (!pageSpeed) {
+                    performanceMetricsDiv.innerHTML = '<p class="status-info">No page speed indicators available.</p>';
+                    return;
+                }
+
+                let html = '<h4>Page Speed Indicators</h4>';
+                html += '<div class="metric-grid">';
+                html += `<div class="metric"><div class="metric-value">${pageSpeed.total_images || 0}</div><div class="metric-label">Total Images</div></div>`;
+                html += `<div class="metric"><div class="metric-value">${pageSpeed.images_without_alt || 0}</div><div class="metric-label">Images without Alt</div></div>`;
+                html += `<div class="metric"><div class="metric-value">${pageSpeed.total_scripts || 0}</div><div class="metric-label">Total Scripts</div></div>`;
+                html += `<div class="metric"><div class="metric-value">${pageSpeed.total_stylesheets || 0}</div><div class="metric-label">Total Stylesheets</div></div>`;
+                html += `<div class="metric"><div class="metric-value">${pageSpeed.total_links || 0}</div><div class="metric-label">Total Links</div></div>`;
+                html += '</div>';
+                performanceMetricsDiv.innerHTML = html;
+            } catch (error) {
+                console.error('Error rendering Performance Metrics:', error);
+                showError('performanceMetrics', 'Error loading performance data.');
+            }
+        }
+
+        function renderContentAnalysis(analysis) {
+            const contentAnalysisDiv = document.getElementById('contentAnalysis');
+            if (!contentAnalysisDiv) return;
+
+            try {
+                const headings = analysis.seo_metadata.headings;
+                const wordCount = analysis.word_count;
+                const topKeywords = analysis.top_keywords;
+
+                let html = '<h4>Content Overview</h4>';
+                html += `<p><strong>Word Count:</strong> ${wordCount || 'N/A'}</p>`;
+
+                html += '<h4>Heading Structure</h4>';
+                html += '<div class="analytics-list">';
+                if (headings) {
+                    for (const h in headings) {
+                        if (headings[h].length > 0) {
+                            html += `<div class="analytics-item"><span class="analytics-name">${h.toUpperCase()} Count</span><span class="analytics-value">${headings[h].length}</span></div>`;
+                        }
+                    }
+                }
+                html += '</div>';
+
+                html += '<h4>Top Keywords</h4>';
+                html += '<div class="analytics-list">';
+                if (topKeywords) {
+                    for (const keyword in topKeywords) {
+                        html += `<div class="analytics-item"><span class="analytics-name">${keyword}</span><span class="analytics-value">${topKeywords[keyword]}</span></div>`;
+                    }
+                } else {
+                    html += `<div class="analytics-item"><span class="analytics-name">No keywords available</span></div>`;
+                }
+                html += '</div>';
+                contentAnalysisDiv.innerHTML = html;
+            } catch (error) {
+                console.error('Error rendering Content Analysis:', error);
+                showError('contentAnalysis', 'Error loading content analysis data.');
+            }
+        }
+
+        function renderAnalyticsTracking(analytics) {
+            const analyticsTrackingDiv = document.getElementById('analyticsTracking');
+            if (!analyticsTrackingDiv) return;
+
+            try {
+                const detailedAnalytics = analytics.detailed_analytics;
+
+                let html = '<h4>Tracking Systems Detected</h4>';
+                html += '<div class="analytics-list">';
+
+                if (detailedAnalytics && Object.values(detailedAnalytics).some(arr => arr.length > 0)) {
+                    if (detailedAnalytics.google_analytics && detailedAnalytics.google_analytics.length > 0) {
+                        detailedAnalytics.google_analytics.forEach(ga => {
+                            html += `<div class="analytics-item"><span class="analytics-name">Google Analytics (${ga.version || 'Unknown'})</span><span class="analytics-value">${ga.measurement_id || ga.tracking_id || 'Detected'}</span></div>`;
+                        });
+                    }
+                    if (detailedAnalytics.facebook_pixel && detailedAnalytics.facebook_pixel.length > 0) {
+                        html += `<div class="analytics-item"><span class="analytics-name">Facebook Pixel</span><span class="analytics-value">Detected</span></div>`;
+                    }
+                    if (detailedAnalytics.google_tag_manager && detailedAnalytics.google_tag_manager.length > 0) {
+                        html += `<div class="analytics-item"><span class="analytics-name">Google Tag Manager</span><span class="analytics-value">Detected</span></div>`;
+                    }
+                    if (detailedAnalytics.hotjar && detailedAnalytics.hotjar.length > 0) {
+                        html += `<div class="analytics-item"><span class="analytics-name">Hotjar</span><span class="analytics-value">Detected</span></div>`;
+                    }
+                    if (detailedAnalytics.mixpanel && detailedAnalytics.mixpanel.length > 0) {
+                        html += `<div class="analytics-item"><span class="analytics-name">Mixpanel</span><span class="analytics-value">Detected</span></div>`;
+                    }
+                    if (detailedAnalytics.other_tracking && detailedAnalytics.other_tracking.length > 0) {
+                        detailedAnalytics.other_tracking.forEach(ot => {
+                            html += `<div class="analytics-item"><span class="analytics-name">Other Tracking</span><span class="analytics-value">${ot.type || 'Detected'}</span></div>`;
+                        });
+                    }
+                    if (detailedAnalytics.social_media_tracking && detailedAnalytics.social_media_tracking.length > 0) {
+                        detailedAnalytics.social_media_tracking.forEach(smt => {
+                            html += `<div class="analytics-item"><span class="analytics-name">Social Media Tracking</span><span class="analytics-value">${smt.type || 'Detected'}</span></div>`;
+                        });
+                    }
+                    if (detailedAnalytics.ecommerce_tracking && detailedAnalytics.ecommerce_tracking.length > 0) {
+                        html += `<div class="analytics-item"><span class="analytics-name">E-commerce Tracking</span><span class="analytics-value">Detected</span></div>`;
+                    }
+                } else {
+                    html += '<p class="status-info">No analytics tracking detected.</p>';
+                }
+                html += '</div>';
+                analyticsTrackingDiv.innerHTML = html;
+            } catch (error) {
+                console.error('Error rendering Analytics Tracking:', error);
+                showError('analyticsTracking', 'Error loading analytics tracking data.');
+            }
+        }
+
+        let seoChartInstance = null;
+
+        function renderSEOScoreChart(analysis) {
+            const ctx = document.getElementById('seoScoreChart');
+            if (!ctx) return;
+
+            try {
+                // Destroy existing chart if it exists
+                if (seoChartInstance) {
+                    seoChartInstance.destroy();
+                }
+
+                const data = analysis.page_speed_indicators;
+                const totalLinks = data ? data.total_links : 0;
+                const imagesWithoutAlt = data ? data.images_without_alt : 0;
+                const wordCount = analysis.word_count || 0;
+                const h1Count = analysis.seo_metadata.headings.h1 ? analysis.seo_metadata.headings.h1.length : 0;
+
+                seoChartInstance = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Total Links', 'Images without Alt', 'Word Count', 'H1 Headings'],
+                        datasets: [{
+                            data: [totalLinks, imagesWithoutAlt, wordCount / 100, h1Count * 50], // Scaled word count and H1 for visualization
+                            backgroundColor: ['#4CAF50', '#FFC107', '#2196F3', '#9C27B0'],
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            title: {
+                                display: true,
+                                text: 'SEO Key Metrics Distribution',
+                                font: {
+                                    size: 18
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Error rendering SEO Score Chart:', error);
+                showError('seoScoreChart', 'Error loading SEO score chart.');
+            }
+        }
+
+        function renderRecommendations(analysis) {
+            const recommendationsDiv = document.getElementById('recommendations');
+            if (!recommendationsDiv) return;
+
+            try {
+                let html = '<h4>Actionable Insights</h4>';
+                html += '<div class="analytics-list">';
+
+                if (analysis.word_count && analysis.word_count < 500) {
+                    html += `<div class="recommendation-item">Consider increasing your content's word count for better SEO depth.</div>`;
+                }
+                if (analysis.page_speed_indicators && analysis.page_speed_indicators.images_without_alt > 0) {
+                    html += `<div class="recommendation-item">Add alt text to images to improve accessibility and SEO.</div>`;
+                }
+                if (!analysis.seo_metadata.meta_tags.description) {
+                    html += `<div class="recommendation-item">Add a compelling meta description to improve click-through rates.</div>`;
+                }
+                if (analysis.seo_metadata.headings.h1.length === 0) {
+                    html += `<div class="recommendation-item">Ensure each page has a single H1 heading for clear topic definition.</div>`;
+                }
+                if (analysis.page_speed_indicators && analysis.page_speed_indicators.total_links > 0 && analysis.seo_metadata.internal_links.length === 0) {
+                    html += `<div class="recommendation-item">Improve internal linking structure for better crawlability and user navigation.</div>`;
+                }
+
+                if (html === '<h4>Actionable Insights</h4><div class="analytics-list">') { // If no specific recommendations were added
+                    html += `<div class="recommendation-item">No specific recommendations generated based on current data. Keep up the good work!</div>`;
+                }
+
+                html += '</div>';
+                recommendationsDiv.innerHTML = html;
+            } catch (error) {
+                console.error('Error rendering Recommendations:', error);
+                showError('recommendations', 'Error generating recommendations.');
+            }
+        }
+
+        async function loadReports(site) {
+            // Show loading states
+            document.querySelectorAll('.card > div:last-child').forEach(el => {
+                el.innerHTML = '<div class="loading"><i class="fas fa-spinner"></i> <p>Loading data...</p></div>';
+            });
+
+            try {
+                const [analysis, analytics] = await Promise.all([
+                    fetchReport(site, 'analysis'),
+                    fetchReport(site, 'analytics')
+                ]);
+
+                // Render all sections
+                renderSEOOverview(analysis);
+                renderPerformanceMetrics(analysis);
+                renderContentAnalysis(analysis);
+                renderAnalyticsTracking(analytics);
+                renderSEOScoreChart(analysis);
+                renderRecommendations(analysis);
+
+            } catch (error) {
+                console.error('Error loading reports:', error);
+                showError('seoOverview', 'Error loading reports');
+            }
+        }
+
+        async function main() {
+            const siteSelect = document.getElementById('siteSelect');
+            const sites = await fetchSites();
+            
+            if (sites.length === 0) {
+                siteSelect.innerHTML = '<option value="">No sites found</option>';
+                return;
+            }
+
+            siteSelect.innerHTML = sites.map(site => 
+                `<option value="${site}">${site}</option>`
+            ).join('');
+
+            siteSelect.addEventListener('change', e => loadReports(e.target.value));
+            
+            // Load first site by default
+            if (sites.length > 0) {
+                loadReports(sites[0]);
+            }
+        }
+
+        // Initialize dashboard
+        main();
+    </script>
+</body>
+</html>
