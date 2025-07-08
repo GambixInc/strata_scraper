@@ -1,0 +1,133 @@
+{
+  "metadata": {
+    "created": "2025-06-18T21:37:00",
+    "last_updated": "2025-07-01T18:15:32.613642",
+    "version": "1.0",
+    "total_sites_scraped": 7,
+    "total_optimizations": 1
+  },
+  "sites": {
+    "uvicorn.org": {
+      "domain": "uvicorn.org",
+      "first_scraped": "2025-06-26T19:56:31.428080",
+      "scrapes": [
+        {
+          "url": "https://www.uvicorn.org/",
+          "scraped_at": "2025-06-26T19:56:31.428080",
+          "saved_directory": "scraped_sites\\uvicorn_org_home_20250626_195631",
+          "title": "Uvicorn",
+          "stats": {
+            "links_count": 126,
+            "inline_styles_count": 0,
+            "internal_stylesheets_count": 3,
+            "external_stylesheets_count": 3,
+            "inline_scripts_count": 8,
+            "external_scripts_count": 1
+          }
+        },
+        {
+          "url": "https://www.uvicorn.org/",
+          "scraped_at": "2025-06-26T20:01:19.233594",
+          "saved_directory": "scraped_sites\\uvicorn_org_home_20250626_200119",
+          "title": "Uvicorn",
+          "stats": {
+            "links_count": 126,
+            "inline_styles_count": 0,
+            "internal_stylesheets_count": 3,
+            "external_stylesheets_count": 3,
+            "inline_scripts_count": 8,
+            "external_scripts_count": 1
+          }
+        },
+        {
+          "url": "https://www.uvicorn.org/",
+          "scraped_at": "2025-06-26T21:45:46.078861",
+          "saved_directory": "scraped_sites\\uvicorn_org_home_20250626_214546",
+          "title": "Uvicorn",
+          "stats": {
+            "links_count": 126,
+            "inline_styles_count": 0,
+            "internal_stylesheets_count": 3,
+            "external_stylesheets_count": 3,
+            "inline_scripts_count": 8,
+            "external_scripts_count": 1
+          }
+        },
+        {
+          "url": "https://www.uvicorn.org/",
+          "scraped_at": "2025-06-26T21:56:55.879222",
+          "saved_directory": "scraped_sites\\uvicorn_org_home_20250626_215655",
+          "title": "Uvicorn",
+          "stats": {
+            "links_count": 126,
+            "inline_styles_count": 0,
+            "internal_stylesheets_count": 3,
+            "external_stylesheets_count": 3,
+            "inline_scripts_count": 8,
+            "external_scripts_count": 1
+          }
+        },
+        {
+          "url": "https://www.uvicorn.org/",
+          "scraped_at": "2025-06-26T22:00:16.801093",
+          "saved_directory": "scraped_sites\\uvicorn_org_home_20250626_220016",
+          "title": "Uvicorn",
+          "stats": {
+            "links_count": 126,
+            "inline_styles_count": 0,
+            "internal_stylesheets_count": 3,
+            "external_stylesheets_count": 3,
+            "inline_scripts_count": 8,
+            "external_scripts_count": 1
+          }
+        },
+        {
+          "url": "https://www.uvicorn.org/",
+          "scraped_at": "2025-06-27T09:21:01.325001",
+          "saved_directory": "scraped_sites\\uvicorn_org_home_20250627_092101",
+          "title": "Uvicorn",
+          "stats": {
+            "links_count": 126,
+            "inline_styles_count": 0,
+            "internal_stylesheets_count": 3,
+            "external_stylesheets_count": 3,
+            "inline_scripts_count": 8,
+            "external_scripts_count": 1
+          }
+        }
+      ],
+      "optimizations": [
+        {
+          "original_url": "https://www.uvicorn.org/",
+          "user_profile": "general",
+          "optimized_at": "2025-06-26T21:57:13.748874",
+          "optimized_directory": "optimized_sites\\uvicorn_org_home_20250626_215713_general"
+        }
+      ],
+      "last_scraped": "2025-06-27T09:21:01.325001",
+      "last_optimized": "2025-06-26T21:57:13.748874"
+    },
+    "mdsbdc.ecenterdirect.com": {
+      "domain": "mdsbdc.ecenterdirect.com",
+      "first_scraped": "2025-07-01T18:15:32.613642",
+      "scrapes": [
+        {
+          "url": "https://mdsbdc.ecenterdirect.com/",
+          "scraped_at": "2025-07-01T18:15:32.613642",
+          "saved_directory": "scraped_sites\\mdsbdc_ecenterdirect_com_home_20250701_181532",
+          "title": "Maryland Small Business Development eCenter Direct",
+          "stats": {
+            "links_count": 14,
+            "inline_styles_count": 29,
+            "internal_stylesheets_count": 1,
+            "external_stylesheets_count": 7,
+            "inline_scripts_count": 3,
+            "external_scripts_count": 5
+          }
+        }
+      ],
+      "optimizations": [],
+      "last_scraped": "2025-07-01T18:15:32.613642"
+    }
+  }
+}
