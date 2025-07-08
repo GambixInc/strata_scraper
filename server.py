@@ -44,6 +44,7 @@ Talisman(app,
         'default-src': "'self'",
         'script-src': "'self' 'unsafe-inline'",
         'style-src': "'self' 'unsafe-inline'",
+        'connect-src': "'self' http://localhost:5000",
     },
     force_https=False,  # Disable automatic HTTPS redirects
     force_https_permanent=False  # Disable permanent HTTPS redirects
@@ -66,11 +67,16 @@ if not app.debug:
 # Serve static files (HTML, CSS, JS)
 @app.route('/')
 def index():
-    return send_from_directory('.', 'scraper_frontend.html')
+    return send_from_directory('strata_design', 'scraper_frontend.html')
 
 @app.route('/dashboard')
 def dashboard():
-    return send_from_directory('.', 'dashboard.html')
+    return send_from_directory('strata_design', 'dashboard.html')
+
+# Serve static assets from strata_design (for future use)
+@app.route('/strata_design/<path:filename>')
+def strata_design_static(filename):
+    return send_from_directory('strata_design', filename)
 
 @app.route('/api/scrape', methods=['POST'])
 @limiter.limit("10 per minute")  # Limit scraping requests

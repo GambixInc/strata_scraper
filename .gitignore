@@ -293,6 +293,7 @@ yarn-error.log*
 # Local development
 .local/
 local/
+strata_design/
 
 # Test coverage
 .coverage
