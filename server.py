@@ -473,45 +473,92 @@ def get_all_tracked_sites():
 @app.route('/api/sites', methods=['GET'])
 def list_scraped_sites():
     """List all scraped site directories."""
-    scraped_dir = 'scraped_sites'
-    if not os.path.exists(scraped_dir):
-        return jsonify({'sites': []})
-    sites = [d for d in os.listdir(scraped_dir) if os.path.isdir(os.path.join(scraped_dir, d))]
-    sites.sort(reverse=True)
-    return jsonify({'sites': sites})
+    try:
+        scraped_dir = 'scraped_sites'
+        if not os.path.exists(scraped_dir):
+            return jsonify({'success': True, 'sites': []})
+        sites = [d for d in os.listdir(scraped_dir) if os.path.isdir(os.path.join(scraped_dir, d))]
+        sites.sort(reverse=True)
+        return jsonify({'success': True, 'sites': sites})
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }), 500
 
 @app.route('/api/report/<site>/<report_type>', methods=['GET'])
 def get_report(site, report_type):
     """Serve a specific report file for a scraped site."""
     scraped_dir = os.path.join('scraped_sites', site)
-    report_map = {
-        'seo': 'seo_report.txt',
-        'analysis': 'content_analysis.json',
-        'analytics': 'analytics_data.json',
-        'metadata': 'metadata.json'
-    }
-    filename = report_map.get(report_type)
-    if not filename:
-        return jsonify({'error': 'Invalid report type'}), 400
-    file_path = os.path.join(scraped_dir, filename)
-    if not os.path.exists(file_path):
-        return jsonify({'error': 'Report not found'}), 404
-    if filename.endswith('.json'):
-        with open(file_path, 'r', encoding='utf-8') as f:
-            return jsonify(json.load(f))
+    
+    # Map report types to actual files
+    if report_type == 'analysis':
+        # For analysis, return the metadata.json restructured for dashboard compatibility
+        file_path = os.path.join(scraped_dir, 'metadata.json')
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                metadata = json.load(f)
+                # Restructure data to match dashboard expectations
+                seo_metadata = metadata.get('seo_metadata', {})
+                analysis_data = {
+                    'original_url': metadata.get('original_url'),
+                    'scraped_at': metadata.get('scraped_at'),
+                    'title': metadata.get('title'),
+                    'stats': metadata.get('stats'),
+                    'seo_metadata': seo_metadata,
+                    # Flatten key metrics for dashboard compatibility
+                    'word_count': seo_metadata.get('word_count', 0),
+                    'top_keywords': seo_metadata.get('keyword_density', {}),
+                    'page_speed_indicators': seo_metadata.get('page_speed_indicators', {})
+                }
+                return jsonify(analysis_data)
+        else:
+            return jsonify({'error': 'Analysis report not found'}), 404
+    
+    elif report_type == 'analytics':
+        # For analytics, extract analytics data from metadata.json
+        metadata_path = os.path.join(scraped_dir, 'metadata.json')
+        if os.path.exists(metadata_path):
+            with open(metadata_path, 'r', encoding='utf-8') as f:
+                metadata = json.load(f)
+                # Extract analytics data from SEO metadata
+                seo_metadata = metadata.get('seo_metadata', {})
+                analytics_data = {
+                    'detailed_analytics': seo_metadata.get('detailed_analytics', {}),
+                    'analytics': seo_metadata.get('analytics', [])
+                }
+                return jsonify(analytics_data)
+        else:
+            return jsonify({'error': 'Analytics report not found'}), 404
+    
+    elif report_type == 'metadata':
+        file_path = os.path.join(scraped_dir, 'metadata.json')
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return jsonify(json.load(f))
+        else:
+            return jsonify({'error': 'Metadata not found'}), 404
+    
+    elif report_type == 'seo':
+        file_path = os.path.join(scraped_dir, 'seo_report.txt')
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return f.read(), 200, {'Content-Type': 'text/plain; charset=utf-8'}
+        else:
+            return jsonify({'error': 'SEO report not found'}), 404
+    
     else:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            return f.read(), 200, {'Content-Type': 'text/plain; charset=utf-8'}
+        return jsonify({'error': 'Invalid report type'}), 400
 
 if __name__ == '__main__':
     print("🌐 Starting Web Scraper Server...")
-    print("📱 Frontend will be available at: http://localhost:5000")
-    print("🔧 API endpoint: http://localhost:5000/api/scrape")
-    print("🚀 Optimize endpoint: http://localhost:5000/api/optimize")
-    print("📁 Files endpoint: http://localhost:5000/api/files")
-    print("📊 Tracker stats: http://localhost:5000/api/tracker/stats")
-    print("📋 Tracker summary: http://localhost:5000/api/tracker/summary")
-    print("💚 Health check: http://localhost:5000/api/health")
+    print(f"📱 Frontend will be available at: http://localhost:{PORT}")
+    print(f"🔧 API endpoint: http://localhost:{PORT}/api/scrape")
+    print(f"🚀 Optimize endpoint: http://localhost:{PORT}/api/optimize")
+    print(f"📁 Files endpoint: http://localhost:{PORT}/api/files")
+    print(f"📊 Tracker stats: http://localhost:{PORT}/api/tracker/stats")
+    print(f"📋 Tracker summary: http://localhost:{PORT}/api/tracker/summary")
+    print(f"💚 Health check: http://localhost:{PORT}/api/health")
     print("\n📂 Files will be saved to:")
     print("   - scraped_sites/ (original scraped content)")
     print("   - optimized_sites/ (optimized versions)")

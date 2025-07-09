@@ -547,9 +547,13 @@ def save_content_to_files(scraped_data, url, base_filename=None):
         f.write("-" * 40 + "\n")
         images = seo_data.get('images', [])
         f.write(f"Total Images: {len(images)}\n")
-        images_without_alt = len([img for img in images if not img['alt']])
-        f.write(f"Images without Alt Text: {images_without_alt}\n")
-        f.write(f"Alt Text Coverage: {((len(images) - images_without_alt) / len(images) * 100):.1f}%\n\n")
+        if images:
+            images_without_alt = len([img for img in images if not img['alt']])
+            f.write(f"Images without Alt Text: {images_without_alt}\n")
+            f.write(f"Alt Text Coverage: {((len(images) - images_without_alt) / len(images) * 100):.1f}%\n\n")
+        else:
+            f.write("Images without Alt Text: 0\n")
+            f.write("Alt Text Coverage: N/A (no images found)\n\n")
         
         # Links Analysis
         f.write("LINKS ANALYSIS\n")
