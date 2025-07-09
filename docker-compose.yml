@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  strata-scraper:
+    build: .
+    container_name: strata-scraper
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - HOST=0.0.0.0
+      - DEBUG=False
+    volumes:
+      # Mount logs directory for persistence
+      - ./logs:/app/logs
+      # Mount scraped data directory
+      - ./scraped_data:/app/scraped_data
+      # Mount site tracker for persistence
+      - ./site_tracker.json:/app/site_tracker.json
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s 

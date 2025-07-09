@@ -1,7 +1,8 @@
 {
   "metadata": {
     "created": "2025-06-18T21:37:00",
-    "last_updated": "2025-07-08T20:07:51.830257",
+
+    "last_updated": "2025-07-09T09:11:43.655914",
     "version": "1.0",
     "total_sites_scraped": 8,
     "total_optimizations": 1
@@ -129,27 +130,29 @@
       "optimizations": [],
       "last_scraped": "2025-07-01T18:15:32.613642"
     },
-    "rankai.ai": {
-      "domain": "rankai.ai",
-      "first_scraped": "2025-07-08T20:07:51.830223",
+
+    "agicent.com": {
+      "domain": "agicent.com",
+      "first_scraped": "2025-07-09T09:11:43.655914",
       "scrapes": [
         {
-          "url": "https://rankai.ai/",
-          "scraped_at": "2025-07-08T20:07:51.830236",
-          "saved_directory": "scraped_sites/rankai_ai_home_20250708_200751",
-          "title": "Rankai - AI-Powered SEO Agency",
+          "url": "https://www.agicent.com/mvp-development-services?gad_source=1&gad_campaignid=22745009204&gbraid=0AAAAADoBY9mAYsb83deCr9mulyYJBUCTz&gclid=CjwKCAjwg7PDBhBxEiwAf1CVu7pZ9KJm2gHv8gxzY-wrvdgeIlo6_D-VrDB_Mnc9aKPBrHi61Cn74RoC8AQQAvD_BwE",
+          "scraped_at": "2025-07-09T09:11:43.655914",
+          "saved_directory": "scraped_sites\\agicent_com_mvp-development-services_20250709_091143",
+          "title": "MVP Development Services | Agicent",
           "stats": {
-            "links_count": 0,
-            "inline_styles_count": 1,
-            "internal_stylesheets_count": 1,
-            "external_stylesheets_count": 2,
-            "inline_scripts_count": 18,
-            "external_scripts_count": 34
+            "links_count": 129,
+            "inline_styles_count": 24,
+            "internal_stylesheets_count": 0,
+            "external_stylesheets_count": 7,
+            "inline_scripts_count": 17,
+            "external_scripts_count": 10
           }
         }
       ],
       "optimizations": [],
-      "last_scraped": "2025-07-08T20:07:51.830245"
+
+      "last_scraped": "2025-07-09T09:11:43.655914"
     }
   }
 }
