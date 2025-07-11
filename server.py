@@ -538,12 +538,11 @@ def get_report(site, report_type):
                 return jsonify(json.load(f))
         else:
             return jsonify({'error': 'Metadata not found'}), 404
-    
     elif report_type == 'seo':
         file_path = os.path.join(scraped_dir, 'seo_report.txt')
         if os.path.exists(file_path):
             with open(file_path, 'r', encoding='utf-8') as f:
-                return f.read(), 200, {'Content-Type': 'text/plain; charset=utf-8'}
+                return jsonify(f.read())
         else:
             return jsonify({'error': 'SEO report not found'}), 404
     
