@@ -1,10 +1,9 @@
 {
   "metadata": {
     "created": "2025-06-18T21:37:00",
-
-    "last_updated": "2025-07-09T09:11:43.655914",
+    "last_updated": "2025-07-18T10:33:04.075406",
     "version": "1.0",
-    "total_sites_scraped": 8,
+    "total_sites_scraped": 9,
     "total_optimizations": 1
   },
   "sites": {
@@ -95,6 +94,20 @@
             "inline_scripts_count": 8,
             "external_scripts_count": 1
           }
+        },
+        {
+          "url": "https://www.uvicorn.org/",
+          "scraped_at": "2025-07-18T10:33:04.075355",
+          "saved_directory": "scraped_sites/uvicorn_org_home_20250718_103304",
+          "title": "Uvicorn",
+          "stats": {
+            "links_count": 126,
+            "inline_styles_count": 0,
+            "internal_stylesheets_count": 3,
+            "external_stylesheets_count": 3,
+            "inline_scripts_count": 8,
+            "external_scripts_count": 1
+          }
         }
       ],
       "optimizations": [
@@ -105,7 +118,7 @@
           "optimized_directory": "optimized_sites\\uvicorn_org_home_20250626_215713_general"
         }
       ],
-      "last_scraped": "2025-06-27T09:21:01.325001",
+      "last_scraped": "2025-07-18T10:33:04.075379",
       "last_optimized": "2025-06-26T21:57:13.748874"
     },
     "mdsbdc.ecenterdirect.com": {
@@ -130,7 +143,6 @@
       "optimizations": [],
       "last_scraped": "2025-07-01T18:15:32.613642"
     },
-
     "agicent.com": {
       "domain": "agicent.com",
       "first_scraped": "2025-07-09T09:11:43.655914",
@@ -151,7 +163,6 @@
         }
       ],
       "optimizations": [],
-
       "last_scraped": "2025-07-09T09:11:43.655914"
     }
   }

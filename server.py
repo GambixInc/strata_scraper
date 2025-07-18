@@ -65,18 +65,13 @@ if not app.debug:
     app.logger.info('Web Scraper startup')
 
 # Serve static files (HTML, CSS, JS)
-@app.route('/')
-def index():
-    return send_from_directory('strata_design', 'scraper_frontend.html')
-
-@app.route('/dashboard')
-def dashboard():
-    return send_from_directory('strata_design', 'dashboard.html')
-
-# Serve static assets from strata_design (for future use)
-@app.route('/strata_design/<path:filename>')
-def strata_design_static(filename):
-    return send_from_directory('strata_design', filename)
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_react_app(path):
+    if path.startswith('api/') or path.startswith('strata_design/') or path.startswith('static/'):
+        # Let other routes handle API and static asset requests
+        return app.send_static_file(path)
+    return send_from_directory('strata_design', 'index.html')
 
 @app.route('/api/scrape', methods=['POST'])
 @limiter.limit("10 per minute")  # Limit scraping requests
