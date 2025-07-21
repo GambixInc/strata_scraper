@@ -1,9 +1,9 @@
 {
   "metadata": {
     "created": "2025-06-18T21:37:00",
-    "last_updated": "2025-07-18T10:33:04.075406",
+    "last_updated": "2025-07-20T20:35:15.083428",
     "version": "1.0",
-    "total_sites_scraped": 9,
+    "total_sites_scraped": 11,
     "total_optimizations": 1
   },
   "sites": {
@@ -108,6 +108,34 @@
             "inline_scripts_count": 8,
             "external_scripts_count": 1
           }
+        },
+        {
+          "url": "https://www.uvicorn.org/",
+          "scraped_at": "2025-07-20T20:31:11.413604",
+          "saved_directory": "scraped_sites/uvicorn_org_home_20250720_203111",
+          "title": "Uvicorn",
+          "stats": {
+            "links_count": 126,
+            "inline_styles_count": 0,
+            "internal_stylesheets_count": 3,
+            "external_stylesheets_count": 3,
+            "inline_scripts_count": 8,
+            "external_scripts_count": 1
+          }
+        },
+        {
+          "url": "https://www.uvicorn.org/",
+          "scraped_at": "2025-07-20T20:35:15.083409",
+          "saved_directory": "scraped_sites/uvicorn_org_home_20250720_203515",
+          "title": "Uvicorn",
+          "stats": {
+            "links_count": 126,
+            "inline_styles_count": 0,
+            "internal_stylesheets_count": 3,
+            "external_stylesheets_count": 3,
+            "inline_scripts_count": 8,
+            "external_scripts_count": 1
+          }
         }
       ],
       "optimizations": [
@@ -118,7 +146,7 @@
           "optimized_directory": "optimized_sites\\uvicorn_org_home_20250626_215713_general"
         }
       ],
-      "last_scraped": "2025-07-18T10:33:04.075379",
+      "last_scraped": "2025-07-20T20:35:15.083423",
       "last_optimized": "2025-06-26T21:57:13.748874"
     },
     "mdsbdc.ecenterdirect.com": {
