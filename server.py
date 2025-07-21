@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
 from main import simple_web_scraper, save_content_to_files, get_safe_filename
-from site_tracker import add_scraped_site, add_optimized_site, get_site_stats, export_summary
+from site_tracker import add_scraped_site, add_optimized_site, get_site_stats, export_summary, get_sites_by_user_email
 import json
 from datetime import datetime
 from flask_limiter import Limiter
@@ -85,6 +85,7 @@ def scrape_website():
             return jsonify({'success': False, 'error': 'No JSON data provided'}), 400
             
         url = data.get('url')
+        user_email = data.get('user_email') # Get user_email from request data
         
         if not url:
             return jsonify({'success': False, 'error': 'URL is required'}), 400
@@ -103,7 +104,7 @@ def scrape_website():
                 
                 # Add to site tracker
                 if saved_dir:
-                    add_scraped_site(url, scraped_data, saved_dir)
+                    add_scraped_site(url, scraped_data, saved_dir, user_email) # Pass user_email
                 
                 # Add the saved directory path to the response
                 scraped_data['saved_directory'] = saved_dir
@@ -175,6 +176,33 @@ def optimize_website():
         })
         
     except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }), 500
+
+@app.route('/api/user-sites', methods=['GET'])
+def get_user_sites():
+    """
+    API endpoint to get all sites scraped by a specific user
+    """
+    try:
+        user_email = request.args.get('email')
+        
+        if not user_email:
+            return jsonify({'success': False, 'error': 'Email parameter is required'}), 400
+        
+        # Get user's scraped sites
+        user_sites = get_sites_by_user_email(user_email)
+        
+        return jsonify({
+            'success': True,
+            'sites': user_sites,
+            'total_count': len(user_sites)
+        })
+        
+    except Exception as e:
+        print(f"Error fetching user sites: {str(e)}")
         return jsonify({
             'success': False,
             'error': f'An error occurred: {str(e)}'

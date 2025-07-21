@@ -49,7 +49,7 @@ class SiteTracker:
         parsed = urlparse(url)
         return parsed.netloc.lower().replace('www.', '')
     
-    def add_scraped_site(self, url: str, scraped_data: Dict[str, Any], saved_directory: str) -> bool:
+    def add_scraped_site(self, url: str, scraped_data: Dict[str, Any], saved_directory: str, user_email: Optional[str] = None) -> bool:
         """
         Add a newly scraped site to the tracker
         
@@ -57,6 +57,7 @@ class SiteTracker:
             url: The URL that was scraped
             scraped_data: The scraped data dictionary
             saved_directory: Path to the saved files
+            user_email: Email of the user who scraped the site
             
         Returns:
             bool: True if added successfully, False otherwise
@@ -78,6 +79,7 @@ class SiteTracker:
                 "url": url,
                 "scraped_at": datetime.now().isoformat(),
                 "saved_directory": saved_directory,
+                "user_email": user_email,
                 "title": scraped_data.get('title', 'Unknown'),
                 "stats": {
                     "links_count": len(scraped_data.get('links', [])),
@@ -249,6 +251,44 @@ class SiteTracker:
         
         return results
     
+    def get_sites_by_user_email(self, user_email: str) -> List[Dict[str, Any]]:
+        """
+        Get all sites scraped by a specific user email
+        
+        Args:
+            user_email: The user email to search for
+            
+        Returns:
+            List of sites scraped by that user with metadata
+        """
+        results = []
+        
+        for site_key, site_data in self.data["sites"].items():
+            user_scrapes = []
+            for scrape in site_data["scrapes"]:
+                if scrape.get("user_email") == user_email:
+                    user_scrapes.append(scrape)
+            
+            if user_scrapes:
+                # Get the latest scrape for this user
+                latest_scrape = max(user_scrapes, key=lambda x: x["scraped_at"])
+                
+                results.append({
+                    "url": latest_scrape["url"],
+                    "domain": site_data["domain"],
+                    "title": latest_scrape["title"],
+                    "timestamp": latest_scrape["scraped_at"],
+                    "saved_directory": latest_scrape["saved_directory"],
+                    "category": "Website",  # Default category, could be enhanced
+                    "status": "completed",  # Default status, could be enhanced
+                    "pages_scraped": 1,  # Could be enhanced to count actual pages
+                    "user_email": user_email
+                })
+        
+        # Sort by timestamp, newest first
+        results.sort(key=lambda x: x["timestamp"], reverse=True)
+        return results
+    
     def get_sites_by_user_profile(self, user_profile: str) -> List[Dict[str, Any]]:
         """
         Get all sites optimized for a specific user profile
@@ -320,9 +360,9 @@ class SiteTracker:
 tracker = SiteTracker()
 
 # Convenience functions
-def add_scraped_site(url: str, scraped_data: Dict[str, Any], saved_directory: str) -> bool:
+def add_scraped_site(url: str, scraped_data: Dict[str, Any], saved_directory: str, user_email: Optional[str] = None) -> bool:
     """Add a scraped site to the tracker"""
-    return tracker.add_scraped_site(url, scraped_data, saved_directory)
+    return tracker.add_scraped_site(url, scraped_data, saved_directory, user_email)
 
 def add_optimized_site(url: str, user_profile: str, optimized_directory: str) -> bool:
     """Add an optimized site to the tracker"""
@@ -338,4 +378,8 @@ def get_site_stats() -> Dict[str, Any]:
 
 def export_summary() -> str:
     """Export a summary of all tracked sites"""
-    return tracker.export_summary() 
+    return tracker.export_summary()
+
+def get_sites_by_user_email(user_email: str) -> List[Dict[str, Any]]:
+    """Get all sites scraped by a specific user email"""
+    return tracker.get_sites_by_user_email(user_email) 

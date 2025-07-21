@@ -1,9 +1,9 @@
 {
   "metadata": {
     "created": "2025-06-18T21:37:00",
-    "last_updated": "2025-07-20T20:35:15.083428",
+    "last_updated": "2025-07-20T21:13:13.879295",
     "version": "1.0",
-    "total_sites_scraped": 11,
+    "total_sites_scraped": 18,
     "total_optimizations": 1
   },
   "sites": {
@@ -136,6 +136,92 @@
             "inline_scripts_count": 8,
             "external_scripts_count": 1
           }
+        },
+        {
+          "url": "https://www.uvicorn.org/",
+          "scraped_at": "2025-07-20T20:55:08.882817",
+          "saved_directory": "scraped_sites/uvicorn_org_home_20250720_205508",
+          "title": "Uvicorn",
+          "stats": {
+            "links_count": 126,
+            "inline_styles_count": 0,
+            "internal_stylesheets_count": 3,
+            "external_stylesheets_count": 3,
+            "inline_scripts_count": 8,
+            "external_scripts_count": 1
+          }
+        },
+        {
+          "url": "https://www.uvicorn.org/",
+          "scraped_at": "2025-07-20T21:07:42.497742",
+          "saved_directory": "scraped_sites/uvicorn_org_home_20250720_210742",
+          "title": "Uvicorn",
+          "stats": {
+            "links_count": 126,
+            "inline_styles_count": 0,
+            "internal_stylesheets_count": 3,
+            "external_stylesheets_count": 3,
+            "inline_scripts_count": 8,
+            "external_scripts_count": 1
+          }
+        },
+        {
+          "url": "https://www.uvicorn.org/",
+          "scraped_at": "2025-07-20T21:07:50.890986",
+          "saved_directory": "scraped_sites/uvicorn_org_home_20250720_210750",
+          "title": "Uvicorn",
+          "stats": {
+            "links_count": 126,
+            "inline_styles_count": 0,
+            "internal_stylesheets_count": 3,
+            "external_stylesheets_count": 3,
+            "inline_scripts_count": 8,
+            "external_scripts_count": 1
+          }
+        },
+        {
+          "url": "https://www.uvicorn.org/",
+          "scraped_at": "2025-07-20T21:09:44.496721",
+          "saved_directory": "scraped_sites/uvicorn_org_home_20250720_210944",
+          "title": "Uvicorn",
+          "stats": {
+            "links_count": 126,
+            "inline_styles_count": 0,
+            "internal_stylesheets_count": 3,
+            "external_stylesheets_count": 3,
+            "inline_scripts_count": 8,
+            "external_scripts_count": 1
+          }
+        },
+        {
+          "url": "https://www.uvicorn.org/",
+          "scraped_at": "2025-07-20T21:11:58.113451",
+          "saved_directory": "scraped_sites/uvicorn_org_home_20250720_211158",
+          "user_email": "olivia@strata.com",
+          "title": "Uvicorn",
+          "stats": {
+            "links_count": 126,
+            "inline_styles_count": 0,
+            "internal_stylesheets_count": 3,
+            "external_stylesheets_count": 3,
+            "inline_scripts_count": 8,
+            "external_scripts_count": 1
+          }
+        },
+        {
+          "url": "https://www.uvicorn.org/",
+          "scraped_at": "2025-07-20T21:12:55.325219",
+          "saved_directory": "scraped_sites/uvicorn_org_home_20250720_211255",
+          "user_email": "olivia@strata.com",
+          "title": "Uvicorn",
+          "stats": {
+            "links_count": 126,
+            "inline_styles_count": 0,
+            "internal_stylesheets_count": 3,
+            "external_stylesheets_count": 3,
+            "inline_scripts_count": 8,
+            "external_scripts_count": 1
+          }
         }
       ],
       "optimizations": [
@@ -146,7 +232,7 @@
           "optimized_directory": "optimized_sites\\uvicorn_org_home_20250626_215713_general"
         }
       ],
-      "last_scraped": "2025-07-20T20:35:15.083423",
+      "last_scraped": "2025-07-20T21:12:55.325234",
       "last_optimized": "2025-06-26T21:57:13.748874"
     },
     "mdsbdc.ecenterdirect.com": {
@@ -192,6 +278,29 @@
       ],
       "optimizations": [],
       "last_scraped": "2025-07-09T09:11:43.655914"
+    },
+    "bevy.org": {
+      "domain": "bevy.org",
+      "first_scraped": "2025-07-20T21:13:13.879276",
+      "scrapes": [
+        {
+          "url": "https://bevy.org/",
+          "scraped_at": "2025-07-20T21:13:13.879284",
+          "saved_directory": "scraped_sites/bevy_org_home_20250720_211313",
+          "user_email": "olivia@strata.com",
+          "title": "Bevy Engine",
+          "stats": {
+            "links_count": 29,
+            "inline_styles_count": 0,
+            "internal_stylesheets_count": 0,
+            "external_stylesheets_count": 1,
+            "inline_scripts_count": 1,
+            "external_scripts_count": 0
+          }
+        }
+      ],
+      "optimizations": [],
+      "last_scraped": "2025-07-20T21:13:13.879292"
     }
   }
 }
