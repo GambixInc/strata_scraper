@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
 from main import simple_web_scraper, save_content_to_files, get_safe_filename
-from site_tracker import add_scraped_site, add_optimized_site, get_site_stats, export_summary, get_sites_by_user_email
+from database import add_scraped_site, add_optimized_site, get_site_stats, export_summary, get_sites_by_user_email, get_all_sites
 import json
 from datetime import datetime
 from flask_limiter import Limiter
@@ -478,11 +478,10 @@ def get_tracker_summary():
 @app.route('/api/tracker/sites', methods=['GET'])
 def get_all_tracked_sites():
     """
-    Get all tracked sites from the tracker
+    Get all tracked sites from the database
     """
     try:
-        from site_tracker import tracker
-        sites = tracker.get_all_sites()
+        sites = get_all_sites()
         return jsonify({
             'success': True,
             'data': sites
@@ -584,7 +583,7 @@ if __name__ == '__main__':
     print("\n📂 Files will be saved to:")
     print("   - scraped_sites/ (original scraped content)")
     print("   - optimized_sites/ (optimized versions)")
-    print("   - site_tracker.json (tracking database)")
+    print("   - scraper_data.db (SQLite database)")
     print("\nPress Ctrl+C to stop the server")
     
     app.run(debug=DEBUG, host=HOST, port=PORT) 

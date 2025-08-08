@@ -1345,6 +1345,16 @@ if __name__ == "__main__":
         saved_dir = save_content_to_files(scraped_data, target_url)
         if saved_dir:
             print(f"\n📁 All files saved to: {saved_dir}")
+            
+            # Save to database
+            try:
+                from database import add_scraped_site
+                if add_scraped_site(target_url, scraped_data, saved_dir):
+                    print("✅ Data saved to SQLite database")
+                else:
+                    print("❌ Failed to save to database")
+            except ImportError:
+                print("⚠️ Database module not available, skipping database save")
         
         # Save analysis results as JSON
         analysis_file = os.path.join(saved_dir, "content_analysis.json")
