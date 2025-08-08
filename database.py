@@ -1,564 +1,818 @@
 import sqlite3
 import json
 import os
+import uuid
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 from urllib.parse import urlparse
 
-class Database:
-    """SQLite database manager for the web scraper project"""
+class GambixStrataDatabase:
+    """SQLite database manager for the Gambix Strata platform"""
     
-    def __init__(self, db_path: str = "scraper_data.db"):
-        self.db_path = db_path
+    def __init__(self, db_path: str = None):
+        if db_path is None:
+            # Use data directory if it exists (Docker environment), otherwise use current directory
+            if os.path.exists("/app/data"):
+                self.db_path = "/app/data/gambix_strata.db"
+            else:
+                self.db_path = "gambix_strata.db"
+        else:
+            self.db_path = db_path
         self.init_database()
     
     def init_database(self):
-        """Initialize the database with required tables"""
+        """Initialize the database with the Gambix Strata schema"""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
-            # Create sites table
+            # Enable foreign keys
+            cursor.execute("PRAGMA foreign_keys = ON")
+            
+            # Create users table
             cursor.execute('''
-                CREATE TABLE IF NOT EXISTS sites (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id TEXT PRIMARY KEY,
+                    email TEXT UNIQUE NOT NULL,
+                    name TEXT NOT NULL,
+                    role TEXT CHECK(role IN ('admin', 'user', 'viewer')) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_login TIMESTAMP,
+                    is_active BOOLEAN DEFAULT 1,
+                    preferences TEXT -- JSON string
+                )
+            ''')
+            
+            # Create projects table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS projects (
+                    project_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
                     domain TEXT NOT NULL,
-                    first_scraped TEXT NOT NULL,
-                    last_scraped TEXT,
-                    last_optimized TEXT,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
+                    name TEXT NOT NULL,
+                    status TEXT CHECK(status IN ('active', 'inactive', 'needs_attention')) DEFAULT 'active',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_crawl TIMESTAMP,
+                    auto_optimize BOOLEAN DEFAULT 0,
+                    settings TEXT, -- JSON string
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
                 )
             ''')
             
-            # Create scrapes table
+            # Create site_health table
             cursor.execute('''
-                CREATE TABLE IF NOT EXISTS scrapes (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    site_id INTEGER NOT NULL,
-                    url TEXT NOT NULL,
+                CREATE TABLE IF NOT EXISTS site_health (
+                    health_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    overall_score INTEGER CHECK(overall_score >= 0 AND overall_score <= 100),
+                    technical_seo INTEGER,
+                    content_seo INTEGER,
+                    performance INTEGER,
+                    internal_linking INTEGER,
+                    visual_ux INTEGER,
+                    authority_backlinks INTEGER,
+                    total_impressions INTEGER DEFAULT 0,
+                    total_engagements INTEGER DEFAULT 0,
+                    total_conversions INTEGER DEFAULT 0,
+                    crawl_data TEXT, -- JSON string
+                    FOREIGN KEY (project_id) REFERENCES projects(project_id)
+                )
+            ''')
+            
+            # Create pages table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS pages (
+                    page_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    page_url TEXT NOT NULL,
                     title TEXT,
-                    scraped_at TEXT NOT NULL,
-                    saved_directory TEXT,
-                    user_email TEXT,
+                    status TEXT CHECK(status IN ('healthy', 'broken', 'has_issues')) DEFAULT 'healthy',
+                    last_crawled TIMESTAMP,
+                    word_count INTEGER DEFAULT 0,
+                    load_time REAL,
+                    meta_description TEXT,
+                    h1_tags TEXT, -- JSON array
+                    images_count INTEGER DEFAULT 0,
                     links_count INTEGER DEFAULT 0,
-                    inline_styles_count INTEGER DEFAULT 0,
-                    internal_stylesheets_count INTEGER DEFAULT 0,
-                    external_stylesheets_count INTEGER DEFAULT 0,
-                    inline_scripts_count INTEGER DEFAULT 0,
-                    external_scripts_count INTEGER DEFAULT 0,
-                    word_count INTEGER DEFAULT 0,
-                    content_size_mb REAL DEFAULT 0,
-                    FOREIGN KEY (site_id) REFERENCES sites (id)
+                    FOREIGN KEY (project_id) REFERENCES projects(project_id)
                 )
             ''')
             
-            # Create optimizations table
+            # Create recommendations table
             cursor.execute('''
-                CREATE TABLE IF NOT EXISTS optimizations (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    site_id INTEGER NOT NULL,
-                    original_url TEXT NOT NULL,
-                    user_profile TEXT NOT NULL,
-                    optimized_at TEXT NOT NULL,
-                    optimized_directory TEXT,
-                    optimization_type TEXT DEFAULT 'general_enhancement',
-                    FOREIGN KEY (site_id) REFERENCES sites (id)
+                CREATE TABLE IF NOT EXISTS recommendations (
+                    recommendation_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    page_url TEXT,
+                    category TEXT CHECK(category IN ('content_seo', 'technical_seo', 'performance', 'internal_linking', 'visual_ux', 'authority')),
+                    issue TEXT NOT NULL,
+                    recommendation TEXT NOT NULL,
+                    priority TEXT CHECK(priority IN ('high', 'medium', 'low')) DEFAULT 'medium',
+                    status TEXT CHECK(status IN ('pending', 'accepted', 'implemented', 'dismissed')) DEFAULT 'pending',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    implemented_at TIMESTAMP,
+                    impact_score INTEGER CHECK(impact_score >= 0 AND impact_score <= 100),
+                    guidelines TEXT, -- JSON array
+                    FOREIGN KEY (project_id) REFERENCES projects(project_id)
                 )
             ''')
             
-            # Create seo_metadata table
+            # Create alerts table
             cursor.execute('''
-                CREATE TABLE IF NOT EXISTS seo_metadata (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    scrape_id INTEGER NOT NULL,
-                    meta_tags TEXT,  -- JSON
-                    open_graph TEXT,  -- JSON
-                    twitter_cards TEXT,  -- JSON
-                    structured_data TEXT,  -- JSON
-                    headings TEXT,  -- JSON
-                    images TEXT,  -- JSON
-                    internal_links TEXT,  -- JSON
-                    external_links TEXT,  -- JSON
-                    social_links TEXT,  -- JSON
-                    canonical_url TEXT,
-                    robots_directive TEXT,
-                    language TEXT,
-                    charset TEXT,
-                    viewport TEXT,
-                    favicon TEXT,
-                    sitemap TEXT,
-                    rss_feeds TEXT,  -- JSON
-                    analytics TEXT,  -- JSON
-                    word_count INTEGER DEFAULT 0,
-                    keyword_density TEXT,  -- JSON
-                    page_speed_indicators TEXT,  -- JSON
-                    detailed_analytics TEXT,  -- JSON
-                    FOREIGN KEY (scrape_id) REFERENCES scrapes (id)
+                CREATE TABLE IF NOT EXISTS alerts (
+                    alert_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    project_id TEXT,
+                    type TEXT CHECK(type IN ('low_site_health', 'high_priority_recommendation', 'crawl_complete')),
+                    title TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    priority TEXT CHECK(priority IN ('high', 'medium', 'low')) DEFAULT 'medium',
+                    status TEXT CHECK(status IN ('active', 'dismissed', 'resolved')) DEFAULT 'active',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    dismissed_at TIMESTAMP,
+                    metadata TEXT, -- JSON string
+                    FOREIGN KEY (user_id) REFERENCES users(user_id),
+                    FOREIGN KEY (project_id) REFERENCES projects(project_id)
                 )
             ''')
             
-            # Create analytics_data table
+            # Create optimization_history table
             cursor.execute('''
-                CREATE TABLE IF NOT EXISTS analytics_data (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    scrape_id INTEGER NOT NULL,
-                    google_analytics TEXT,  -- JSON
-                    facebook_pixel TEXT,  -- JSON
-                    google_tag_manager TEXT,  -- JSON
-                    hotjar TEXT,  -- JSON
-                    mixpanel TEXT,  -- JSON
-                    other_tracking TEXT,  -- JSON
-                    social_media_tracking TEXT,  -- JSON
-                    analytics_summary TEXT,  -- JSON
-                    tracking_intensity TEXT,
-                    FOREIGN KEY (scrape_id) REFERENCES scrapes (id)
+                CREATE TABLE IF NOT EXISTS optimization_history (
+                    optimization_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    page_url TEXT,
+                    recommendation_id TEXT,
+                    action TEXT NOT NULL,
+                    before_score INTEGER,
+                    after_score INTEGER,
+                    implemented_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    implemented_by TEXT,
+                    changes TEXT, -- JSON string
+                    FOREIGN KEY (project_id) REFERENCES projects(project_id),
+                    FOREIGN KEY (recommendation_id) REFERENCES recommendations(recommendation_id),
+                    FOREIGN KEY (implemented_by) REFERENCES users(user_id)
                 )
             ''')
             
-            # Create indexes for better performance
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_sites_domain ON sites (domain)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_scrapes_site_id ON scrapes (site_id)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_scrapes_user_email ON scrapes (user_email)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_scrapes_scraped_at ON scrapes (scraped_at)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_optimizations_site_id ON optimizations (site_id)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_seo_metadata_scrape_id ON seo_metadata (scrape_id)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_analytics_data_scrape_id ON analytics_data (scrape_id)')
+            # Create indexes
+            self._create_indexes(cursor)
             
             conn.commit()
     
-    def _get_site_key(self, url: str) -> str:
-        """Generate a unique key for a site based on its domain"""
-        parsed = urlparse(url)
-        return parsed.netloc.lower().replace('www.', '')
+    def _create_indexes(self, cursor):
+        """Create all necessary indexes for performance"""
+        indexes = [
+            # Users indexes
+            "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)",
+            "CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)",
+            
+            # Projects indexes
+            "CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_projects_domain ON projects(domain)",
+            "CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status)",
+            
+            # Site health indexes
+            "CREATE INDEX IF NOT EXISTS idx_site_health_project_id ON site_health(project_id)",
+            "CREATE INDEX IF NOT EXISTS idx_site_health_timestamp ON site_health(timestamp)",
+            
+            # Pages indexes
+            "CREATE INDEX IF NOT EXISTS idx_pages_project_id ON pages(project_id)",
+            "CREATE INDEX IF NOT EXISTS idx_pages_status ON pages(status)",
+            "CREATE INDEX IF NOT EXISTS idx_pages_url ON pages(page_url)",
+            
+            # Recommendations indexes
+            "CREATE INDEX IF NOT EXISTS idx_recommendations_project_id ON recommendations(project_id)",
+            "CREATE INDEX IF NOT EXISTS idx_recommendations_category ON recommendations(category)",
+            "CREATE INDEX IF NOT EXISTS idx_recommendations_status ON recommendations(status)",
+            "CREATE INDEX IF NOT EXISTS idx_recommendations_priority ON recommendations(priority)",
+            
+            # Alerts indexes
+            "CREATE INDEX IF NOT EXISTS idx_alerts_user_id ON alerts(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_alerts_project_id ON alerts(project_id)",
+            "CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status)",
+            "CREATE INDEX IF NOT EXISTS idx_alerts_priority ON alerts(priority)",
+            
+            # Optimization history indexes
+            "CREATE INDEX IF NOT EXISTS idx_optimization_history_project_id ON optimization_history(project_id)",
+            "CREATE INDEX IF NOT EXISTS idx_optimization_history_page_url ON optimization_history(page_url)",
+            "CREATE INDEX IF NOT EXISTS idx_optimization_history_implemented_at ON optimization_history(implemented_at)"
+        ]
+        
+        for index_sql in indexes:
+            cursor.execute(index_sql)
     
-    def add_scraped_site(self, url: str, scraped_data: Dict[str, Any], saved_directory: str, user_email: Optional[str] = None) -> bool:
-        """Add a newly scraped site to the database"""
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                
-                site_key = self._get_site_key(url)
-                now = datetime.now().isoformat()
-                
-                # Check if site exists, create if not
-                cursor.execute('SELECT id FROM sites WHERE domain = ?', (site_key,))
-                site_result = cursor.fetchone()
-                
-                if site_result:
-                    site_id = site_result[0]
-                    # Update last_scraped
-                    cursor.execute('UPDATE sites SET last_scraped = ?, updated_at = ? WHERE id = ?', 
-                                 (now, now, site_id))
-                else:
-                    # Create new site
-                    cursor.execute('''
-                        INSERT INTO sites (domain, first_scraped, last_scraped, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?)
-                    ''', (site_key, now, now, now, now))
-                    site_id = cursor.lastrowid
-                
-                # Add scrape record
-                seo_data = scraped_data.get('seo_metadata', {})
-                stats = {
-                    'links_count': len(scraped_data.get('links', [])),
-                    'inline_styles_count': len(scraped_data.get('css_content', {}).get('inline_styles', [])),
-                    'internal_stylesheets_count': len(scraped_data.get('css_content', {}).get('internal_stylesheets', [])),
-                    'external_stylesheets_count': len(scraped_data.get('css_content', {}).get('external_stylesheets', [])),
-                    'inline_scripts_count': len(scraped_data.get('js_content', {}).get('inline_scripts', [])),
-                    'external_scripts_count': len(scraped_data.get('js_content', {}).get('external_scripts', []))
-                }
-                
-                cursor.execute('''
-                    INSERT INTO scrapes (
-                        site_id, url, title, scraped_at, saved_directory, user_email,
-                        links_count, inline_styles_count, internal_stylesheets_count,
-                        external_stylesheets_count, inline_scripts_count, external_scripts_count,
-                        word_count, content_size_mb
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    site_id, url, scraped_data.get('title', 'Unknown'), now, saved_directory, user_email,
-                    stats['links_count'], stats['inline_styles_count'], stats['internal_stylesheets_count'],
-                    stats['external_stylesheets_count'], stats['inline_scripts_count'], stats['external_scripts_count'],
-                    seo_data.get('word_count', 0), len(scraped_data.get('html_content', '').encode('utf-8')) / (1024 * 1024)
-                ))
-                
-                scrape_id = cursor.lastrowid
-                
-                # Add SEO metadata
-                if seo_data:
-                    cursor.execute('''
-                        INSERT INTO seo_metadata (
-                            scrape_id, meta_tags, open_graph, twitter_cards, structured_data,
-                            headings, images, internal_links, external_links, social_links,
-                            canonical_url, robots_directive, language, charset, viewport,
-                            favicon, sitemap, rss_feeds, analytics, word_count,
-                            keyword_density, page_speed_indicators, detailed_analytics
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (
-                        scrape_id,
-                        json.dumps(seo_data.get('meta_tags', {})),
-                        json.dumps(seo_data.get('open_graph', {})),
-                        json.dumps(seo_data.get('twitter_cards', {})),
-                        json.dumps(seo_data.get('structured_data', [])),
-                        json.dumps(seo_data.get('headings', {})),
-                        json.dumps(seo_data.get('images', [])),
-                        json.dumps(seo_data.get('internal_links', [])),
-                        json.dumps(seo_data.get('external_links', [])),
-                        json.dumps(seo_data.get('social_links', [])),
-                        seo_data.get('canonical_url'),
-                        seo_data.get('robots_directive'),
-                        seo_data.get('language'),
-                        seo_data.get('charset'),
-                        seo_data.get('viewport'),
-                        seo_data.get('favicon'),
-                        seo_data.get('sitemap'),
-                        json.dumps(seo_data.get('rss_feeds', [])),
-                        json.dumps(seo_data.get('analytics', [])),
-                        seo_data.get('word_count', 0),
-                        json.dumps(seo_data.get('keyword_density', {})),
-                        json.dumps(seo_data.get('page_speed_indicators', {})),
-                        json.dumps(seo_data.get('detailed_analytics', {}))
-                    ))
-                
-                # Add analytics data
-                analytics_data = seo_data.get('detailed_analytics', {})
-                if analytics_data:
-                    cursor.execute('''
-                        INSERT INTO analytics_data (
-                            scrape_id, google_analytics, facebook_pixel, google_tag_manager,
-                            hotjar, mixpanel, other_tracking, social_media_tracking,
-                            analytics_summary, tracking_intensity
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (
-                        scrape_id,
-                        json.dumps(analytics_data.get('google_analytics', [])),
-                        json.dumps(analytics_data.get('facebook_pixel', [])),
-                        json.dumps(analytics_data.get('google_tag_manager', [])),
-                        json.dumps(analytics_data.get('hotjar', [])),
-                        json.dumps(analytics_data.get('mixpanel', [])),
-                        json.dumps(analytics_data.get('other_tracking', [])),
-                        json.dumps(analytics_data.get('social_media_tracking', [])),
-                        json.dumps(analytics_data.get('analytics_summary', {})),
-                        analytics_data.get('analytics_summary', {}).get('tracking_intensity', 'Unknown')
-                    ))
-                
-                conn.commit()
-                return True
-                
-        except Exception as e:
-            print(f"Error adding scraped site to database: {e}")
-            return False
+    def _generate_id(self) -> str:
+        """Generate a UUID for primary keys"""
+        return str(uuid.uuid4())
     
-    def add_optimized_site(self, url: str, user_profile: str, optimized_directory: str) -> bool:
-        """Add an optimized version to the database"""
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                
-                site_key = self._get_site_key(url)
-                now = datetime.now().isoformat()
-                
-                # Get site ID
-                cursor.execute('SELECT id FROM sites WHERE domain = ?', (site_key,))
-                site_result = cursor.fetchone()
-                
-                if not site_result:
-                    # Create site if it doesn't exist
-                    cursor.execute('''
-                        INSERT INTO sites (domain, first_scraped, last_optimized, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?)
-                    ''', (site_key, now, now, now, now))
-                    site_id = cursor.lastrowid
-                else:
-                    site_id = site_result[0]
-                    # Update last_optimized
-                    cursor.execute('UPDATE sites SET last_optimized = ?, updated_at = ? WHERE id = ?', 
-                                 (now, now, site_id))
-                
-                # Add optimization record
-                cursor.execute('''
-                    INSERT INTO optimizations (
-                        site_id, original_url, user_profile, optimized_at, optimized_directory
-                    ) VALUES (?, ?, ?, ?, ?)
-                ''', (site_id, url, user_profile, now, optimized_directory))
-                
-                conn.commit()
-                return True
-                
-        except Exception as e:
-            print(f"Error adding optimized site to database: {e}")
-            return False
+    def _serialize_json(self, data: Any) -> str:
+        """Serialize data to JSON string"""
+        if data is None:
+            return None
+        return json.dumps(data)
     
-    def is_site_scraped(self, url: str) -> bool:
-        """Check if a site has been scraped before"""
+    def _deserialize_json(self, json_str: str) -> Any:
+        """Deserialize JSON string to data"""
+        if json_str is None:
+            return None
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                site_key = self._get_site_key(url)
-                cursor.execute('SELECT COUNT(*) FROM scrapes s JOIN sites st ON s.site_id = st.id WHERE st.domain = ?', (site_key,))
-                count = cursor.fetchone()[0]
-                return count > 0
-        except Exception as e:
-            print(f"Error checking if site is scraped: {e}")
-            return False
-    
-    def get_site_info(self, url: str) -> Optional[Dict[str, Any]]:
-        """Get information about a specific site"""
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                site_key = self._get_site_key(url)
-                
-                cursor.execute('''
-                    SELECT s.*, 
-                           COUNT(sc.id) as scrapes_count,
-                           COUNT(op.id) as optimizations_count
-                    FROM sites s
-                    LEFT JOIN scrapes sc ON s.id = sc.site_id
-                    LEFT JOIN optimizations op ON s.id = op.site_id
-                    WHERE s.domain = ?
-                    GROUP BY s.id
-                ''', (site_key,))
-                
-                result = cursor.fetchone()
-                if result:
-                    columns = [desc[0] for desc in cursor.description]
-                    site_data = dict(zip(columns, result))
-                    
-                    # Get latest scrape
-                    cursor.execute('''
-                        SELECT * FROM scrapes 
-                        WHERE site_id = ? 
-                        ORDER BY scraped_at DESC 
-                        LIMIT 1
-                    ''', (site_data['id'],))
-                    
-                    latest_scrape = cursor.fetchone()
-                    if latest_scrape:
-                        scrape_columns = [desc[0] for desc in cursor.description]
-                        site_data['latest_scrape'] = dict(zip(scrape_columns, latest_scrape))
-                    
-                    return site_data
-                return None
-                
-        except Exception as e:
-            print(f"Error getting site info: {e}")
+            return json.loads(json_str)
+        except (json.JSONDecodeError, TypeError):
             return None
     
-    def get_all_sites(self) -> Dict[str, Any]:
-        """Get information about all tracked sites"""
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                
-                cursor.execute('''
-                    SELECT s.*, 
-                           COUNT(sc.id) as scrapes_count,
-                           COUNT(op.id) as optimizations_count
-                    FROM sites s
-                    LEFT JOIN scrapes sc ON s.id = sc.site_id
-                    LEFT JOIN optimizations op ON s.id = op.site_id
-                    GROUP BY s.id
-                    ORDER BY s.updated_at DESC
-                ''')
-                
-                results = cursor.fetchall()
-                columns = [desc[0] for desc in cursor.description]
-                
-                sites = {}
-                for result in results:
-                    site_data = dict(zip(columns, result))
-                    sites[site_data['domain']] = site_data
-                
-                return sites
-                
-        except Exception as e:
-            print(f"Error getting all sites: {e}")
-            return {}
+    # User Management
+    def create_user(self, email: str, name: str, role: str = 'user', preferences: Dict = None) -> str:
+        """Create a new user"""
+        user_id = self._generate_id()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO users (user_id, email, name, role, preferences)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (user_id, email, name, role, self._serialize_json(preferences)))
+            conn.commit()
+        return user_id
     
-    def get_site_stats(self) -> Dict[str, Any]:
-        """Get overall statistics about tracked sites"""
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                
-                # Get basic stats
-                cursor.execute('SELECT COUNT(*) FROM sites')
-                total_sites = cursor.fetchone()[0]
-                
-                cursor.execute('SELECT COUNT(*) FROM scrapes')
-                total_scrapes = cursor.fetchone()[0]
-                
-                cursor.execute('SELECT COUNT(*) FROM optimizations')
-                total_optimizations = cursor.fetchone()[0]
-                
-                # Get recent activities
-                cursor.execute('''
-                    SELECT 'scrape' as type, s.domain, sc.scraped_at as timestamp, sc.url
-                    FROM scrapes sc
-                    JOIN sites s ON sc.site_id = s.id
-                    UNION ALL
-                    SELECT 'optimization' as type, s.domain, op.optimized_at as timestamp, op.original_url as url
-                    FROM optimizations op
-                    JOIN sites s ON op.site_id = s.id
-                    ORDER BY timestamp DESC
-                    LIMIT 10
-                ''')
-                
-                recent_activities = []
-                for row in cursor.fetchall():
-                    recent_activities.append({
-                        'type': row[0],
-                        'site': row[1],
-                        'timestamp': row[2],
-                        'url': row[3]
-                    })
-                
-                return {
-                    'total_sites': total_sites,
-                    'total_scrapes': total_scrapes,
-                    'total_optimizations': total_optimizations,
-                    'recent_activities': recent_activities,
-                    'metadata': {
-                        'created': datetime.now().isoformat(),
-                        'last_updated': datetime.now().isoformat(),
-                        'version': '2.0',
-                        'total_sites_scraped': total_sites,
-                        'total_optimizations': total_optimizations
-                    }
-                }
-                
-        except Exception as e:
-            print(f"Error getting site stats: {e}")
-            return {}
+    def get_user(self, user_id: str) -> Optional[Dict]:
+        """Get user by ID"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
+            row = cursor.fetchone()
+            if row:
+                columns = [description[0] for description in cursor.description]
+                user_data = dict(zip(columns, row))
+                user_data['preferences'] = self._deserialize_json(user_data['preferences'])
+                return user_data
+        return None
     
-    def get_sites_by_user_email(self, user_email: str) -> List[Dict[str, Any]]:
-        """Get all sites scraped by a specific user email"""
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                
-                cursor.execute('''
-                    SELECT DISTINCT s.domain, sc.url, sc.title, sc.scraped_at, sc.saved_directory
-                    FROM scrapes sc
-                    JOIN sites s ON sc.site_id = s.id
-                    WHERE sc.user_email = ?
-                    ORDER BY sc.scraped_at DESC
-                ''', (user_email,))
-                
-                results = []
-                for row in cursor.fetchall():
-                    results.append({
-                        'url': row[1],
-                        'domain': row[0],
-                        'title': row[2],
-                        'timestamp': row[3],
-                        'saved_directory': row[4],
-                        'category': 'Website',
-                        'status': 'completed',
-                        'pages_scraped': 1,
-                        'user_email': user_email
-                    })
-                
-                return results
-                
-        except Exception as e:
-            print(f"Error getting sites by user email: {e}")
-            return []
+    def get_user_by_email(self, email: str) -> Optional[Dict]:
+        """Get user by email"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM users WHERE email = ?', (email,))
+            row = cursor.fetchone()
+            if row:
+                columns = [description[0] for description in cursor.description]
+                user_data = dict(zip(columns, row))
+                user_data['preferences'] = self._deserialize_json(user_data['preferences'])
+                return user_data
+        return None
     
-    def search_sites(self, query: str) -> List[Dict[str, Any]]:
-        """Search for sites by domain or title"""
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                
-                cursor.execute('''
-                    SELECT DISTINCT s.*, sc.title
-                    FROM sites s
-                    JOIN scrapes sc ON s.id = sc.site_id
-                    WHERE s.domain LIKE ? OR sc.title LIKE ?
-                    ORDER BY s.updated_at DESC
-                ''', (f'%{query}%', f'%{query}%'))
-                
-                results = []
-                for row in cursor.fetchall():
-                    columns = [desc[0] for desc in cursor.description]
-                    results.append(dict(zip(columns, row)))
-                
-                return results
-                
-        except Exception as e:
-            print(f"Error searching sites: {e}")
-            return []
+    def update_user_login(self, user_id: str):
+        """Update user's last login time"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE users SET last_login = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                WHERE user_id = ?
+            ''', (user_id,))
+            conn.commit()
     
-    def export_summary(self) -> str:
-        """Export a human-readable summary of all tracked sites"""
-        try:
-            stats = self.get_site_stats()
+    # Project Management
+    def create_project(self, user_id: str, domain: str, name: str, settings: Dict = None) -> str:
+        """Create a new project"""
+        project_id = self._generate_id()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO projects (project_id, user_id, domain, name, settings)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (project_id, user_id, domain, name, self._serialize_json(settings)))
+            conn.commit()
+        return project_id
+    
+    def get_user_projects(self, user_id: str) -> List[Dict]:
+        """Get all projects for a user"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT p.*, sh.overall_score, sh.timestamp as last_health_check
+                FROM projects p
+                LEFT JOIN (
+                    SELECT project_id, overall_score, timestamp,
+                           ROW_NUMBER() OVER (PARTITION BY project_id ORDER BY timestamp DESC) as rn
+                    FROM site_health
+                ) sh ON p.project_id = sh.project_id AND sh.rn = 1
+                WHERE p.user_id = ?
+                ORDER BY p.updated_at DESC
+            ''', (user_id,))
+            rows = cursor.fetchall()
+            columns = [description[0] for description in cursor.description]
+            projects = []
+            for row in rows:
+                project_data = dict(zip(columns, row))
+                project_data['settings'] = self._deserialize_json(project_data['settings'])
+                projects.append(project_data)
+            return projects
+    
+    def get_project(self, project_id: str) -> Optional[Dict]:
+        """Get project by ID"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM projects WHERE project_id = ?', (project_id,))
+            row = cursor.fetchone()
+            if row:
+                columns = [description[0] for description in cursor.description]
+                project_data = dict(zip(columns, row))
+                project_data['settings'] = self._deserialize_json(project_data['settings'])
+                return project_data
+        return None
+    
+    def update_project_status(self, project_id: str, status: str):
+        """Update project status"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE projects SET status = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE project_id = ?
+            ''', (status, project_id))
+            conn.commit()
+    
+    # Site Health Management
+    def add_site_health(self, project_id: str, health_data: Dict) -> str:
+        """Add site health metrics"""
+        health_id = self._generate_id()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO site_health (
+                    health_id, project_id, overall_score, technical_seo, content_seo,
+                    performance, internal_linking, visual_ux, authority_backlinks,
+                    total_impressions, total_engagements, total_conversions, crawl_data
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                health_id, project_id,
+                health_data.get('overall_score'),
+                health_data.get('technical_seo'),
+                health_data.get('content_seo'),
+                health_data.get('performance'),
+                health_data.get('internal_linking'),
+                health_data.get('visual_ux'),
+                health_data.get('authority_backlinks'),
+                health_data.get('total_impressions', 0),
+                health_data.get('total_engagements', 0),
+                health_data.get('total_conversions', 0),
+                self._serialize_json(health_data.get('crawl_data'))
+            ))
+            conn.commit()
+        return health_id
+    
+    def get_latest_site_health(self, project_id: str) -> Optional[Dict]:
+        """Get the latest site health for a project"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM site_health 
+                WHERE project_id = ? 
+                ORDER BY timestamp DESC 
+                LIMIT 1
+            ''', (project_id,))
+            row = cursor.fetchone()
+            if row:
+                columns = [description[0] for description in cursor.description]
+                health_data = dict(zip(columns, row))
+                health_data['crawl_data'] = self._deserialize_json(health_data['crawl_data'])
+                return health_data
+        return None
+    
+    def get_site_health_history(self, project_id: str, limit: int = 30) -> List[Dict]:
+        """Get site health history for a project"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM site_health 
+                WHERE project_id = ? 
+                ORDER BY timestamp DESC 
+                LIMIT ?
+            ''', (project_id, limit))
+            rows = cursor.fetchall()
+            columns = [description[0] for description in cursor.description]
+            history = []
+            for row in rows:
+                health_data = dict(zip(columns, row))
+                health_data['crawl_data'] = self._deserialize_json(health_data['crawl_data'])
+                history.append(health_data)
+            return history
+    
+    # Page Management
+    def add_page(self, project_id: str, page_data: Dict) -> str:
+        """Add a page to a project"""
+        page_id = self._generate_id()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO pages (
+                    page_id, project_id, page_url, title, status, last_crawled,
+                    word_count, load_time, meta_description, h1_tags, images_count, links_count
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                page_id, project_id,
+                page_data.get('page_url'),
+                page_data.get('title'),
+                page_data.get('status', 'healthy'),
+                page_data.get('last_crawled'),
+                page_data.get('word_count', 0),
+                page_data.get('load_time'),
+                page_data.get('meta_description'),
+                self._serialize_json(page_data.get('h1_tags')),
+                page_data.get('images_count', 0),
+                page_data.get('links_count', 0)
+            ))
+            conn.commit()
+        return page_id
+    
+    def get_project_pages(self, project_id: str) -> List[Dict]:
+        """Get all pages for a project"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM pages 
+                WHERE project_id = ? 
+                ORDER BY last_crawled DESC
+            ''', (project_id,))
+            rows = cursor.fetchall()
+            columns = [description[0] for description in cursor.description]
+            pages = []
+            for row in rows:
+                page_data = dict(zip(columns, row))
+                page_data['h1_tags'] = self._deserialize_json(page_data['h1_tags'])
+                pages.append(page_data)
+            return pages
+    
+    # Recommendations Management
+    def add_recommendation(self, project_id: str, recommendation_data: Dict) -> str:
+        """Add a recommendation"""
+        recommendation_id = self._generate_id()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO recommendations (
+                    recommendation_id, project_id, page_url, category, issue,
+                    recommendation, priority, impact_score, guidelines
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                recommendation_id, project_id,
+                recommendation_data.get('page_url'),
+                recommendation_data.get('category'),
+                recommendation_data.get('issue'),
+                recommendation_data.get('recommendation'),
+                recommendation_data.get('priority', 'medium'),
+                recommendation_data.get('impact_score'),
+                self._serialize_json(recommendation_data.get('guidelines'))
+            ))
+            conn.commit()
+        return recommendation_id
+    
+    def get_project_recommendations(self, project_id: str, status: str = 'pending') -> List[Dict]:
+        """Get recommendations for a project"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM recommendations 
+                WHERE project_id = ? AND status = ?
+                ORDER BY 
+                    CASE priority 
+                        WHEN 'high' THEN 1 
+                        WHEN 'medium' THEN 2 
+                        WHEN 'low' THEN 3 
+                    END,
+                    impact_score DESC
+            ''', (project_id, status))
+            rows = cursor.fetchall()
+            columns = [description[0] for description in cursor.description]
+            recommendations = []
+            for row in rows:
+                rec_data = dict(zip(columns, row))
+                rec_data['guidelines'] = self._deserialize_json(rec_data['guidelines'])
+                recommendations.append(rec_data)
+            return recommendations
+    
+    def update_recommendation_status(self, recommendation_id: str, status: str):
+        """Update recommendation status"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            if status == 'implemented':
+                cursor.execute('''
+                    UPDATE recommendations 
+                    SET status = ?, implemented_at = CURRENT_TIMESTAMP
+                    WHERE recommendation_id = ?
+                ''', (status, recommendation_id))
+            else:
+                cursor.execute('''
+                    UPDATE recommendations 
+                    SET status = ?
+                    WHERE recommendation_id = ?
+                ''', (status, recommendation_id))
+            conn.commit()
+    
+    # Alerts Management
+    def create_alert(self, user_id: str, alert_data: Dict) -> str:
+        """Create a new alert"""
+        alert_id = self._generate_id()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO alerts (
+                    alert_id, user_id, project_id, type, title, description,
+                    priority, metadata
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                alert_id, user_id,
+                alert_data.get('project_id'),
+                alert_data.get('type'),
+                alert_data.get('title'),
+                alert_data.get('description'),
+                alert_data.get('priority', 'medium'),
+                self._serialize_json(alert_data.get('metadata'))
+            ))
+            conn.commit()
+        return alert_id
+    
+    def get_user_alerts(self, user_id: str, status: str = 'active') -> List[Dict]:
+        """Get alerts for a user"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM alerts 
+                WHERE user_id = ? AND status = ?
+                ORDER BY created_at DESC
+            ''', (user_id, status))
+            rows = cursor.fetchall()
+            columns = [description[0] for description in cursor.description]
+            alerts = []
+            for row in rows:
+                alert_data = dict(zip(columns, row))
+                alert_data['metadata'] = self._deserialize_json(alert_data['metadata'])
+                alerts.append(alert_data)
+            return alerts
+    
+    def dismiss_alert(self, alert_id: str):
+        """Dismiss an alert"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE alerts 
+                SET status = 'dismissed', dismissed_at = CURRENT_TIMESTAMP
+                WHERE alert_id = ?
+            ''', (alert_id,))
+            conn.commit()
+    
+    # Optimization History
+    def add_optimization(self, project_id: str, optimization_data: Dict) -> str:
+        """Add optimization history entry"""
+        optimization_id = self._generate_id()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO optimization_history (
+                    optimization_id, project_id, page_url, recommendation_id,
+                    action, before_score, after_score, implemented_by, changes
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                optimization_id, project_id,
+                optimization_data.get('page_url'),
+                optimization_data.get('recommendation_id'),
+                optimization_data.get('action'),
+                optimization_data.get('before_score'),
+                optimization_data.get('after_score'),
+                optimization_data.get('implemented_by'),
+                self._serialize_json(optimization_data.get('changes'))
+            ))
+            conn.commit()
+        return optimization_id
+    
+    def get_optimization_history(self, project_id: str, limit: int = 50) -> List[Dict]:
+        """Get optimization history for a project"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM optimization_history 
+                WHERE project_id = ? 
+                ORDER BY implemented_at DESC 
+                LIMIT ?
+            ''', (project_id, limit))
+            rows = cursor.fetchall()
+            columns = [description[0] for description in cursor.description]
+            history = []
+            for row in rows:
+                opt_data = dict(zip(columns, row))
+                opt_data['changes'] = self._deserialize_json(opt_data['changes'])
+                history.append(opt_data)
+            return history
+    
+    # Statistics and Analytics
+    def get_project_statistics(self, project_id: str) -> Dict:
+        """Get comprehensive statistics for a project"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
             
-            summary = f"""
-🌐 Web Scraper Database Summary
-{'=' * 50}
+            # Get basic project info
+            cursor.execute('SELECT * FROM projects WHERE project_id = ?', (project_id,))
+            project_row = cursor.fetchone()
+            if not project_row:
+                return None
+            
+            # Get page counts by status
+            cursor.execute('''
+                SELECT status, COUNT(*) as count 
+                FROM pages 
+                WHERE project_id = ? 
+                GROUP BY status
+            ''', (project_id,))
+            page_stats = dict(cursor.fetchall())
+            
+            # Get recommendation counts by priority
+            cursor.execute('''
+                SELECT priority, COUNT(*) as count 
+                FROM recommendations 
+                WHERE project_id = ? AND status = 'pending'
+                GROUP BY priority
+            ''', (project_id,))
+            rec_stats = dict(cursor.fetchall())
+            
+            # Get latest health score
+            cursor.execute('''
+                SELECT overall_score, timestamp 
+                FROM site_health 
+                WHERE project_id = ? 
+                ORDER BY timestamp DESC 
+                LIMIT 1
+            ''', (project_id,))
+            health_row = cursor.fetchone()
+            
+            return {
+                'project_id': project_id,
+                'pages': {
+                    'total': sum(page_stats.values()),
+                    'healthy': page_stats.get('healthy', 0),
+                    'broken': page_stats.get('broken', 0),
+                    'has_issues': page_stats.get('has_issues', 0)
+                },
+                'recommendations': {
+                    'high_priority': rec_stats.get('high', 0),
+                    'medium_priority': rec_stats.get('medium', 0),
+                    'low_priority': rec_stats.get('low', 0)
+                },
+                'health_score': health_row[0] if health_row else None,
+                'last_health_check': health_row[1] if health_row else None
+            }
+    
+    def get_dashboard_data(self, user_id: str) -> Dict:
+        """Get dashboard data for a user"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Get user's projects with latest health scores
+            projects = self.get_user_projects(user_id)
+            
+            # Get active alerts count
+            cursor.execute('''
+                SELECT COUNT(*) FROM alerts 
+                WHERE user_id = ? AND status = 'active'
+            ''', (user_id,))
+            active_alerts = cursor.fetchone()[0]
+            
+            # Get total recommendations across all projects
+            cursor.execute('''
+                SELECT COUNT(*) FROM recommendations r
+                JOIN projects p ON r.project_id = p.project_id
+                WHERE p.user_id = ? AND r.status = 'pending'
+            ''', (user_id,))
+            total_recommendations = cursor.fetchone()[0]
+            
+            return {
+                'projects': projects,
+                'active_alerts': active_alerts,
+                'total_recommendations': total_recommendations,
+                'total_projects': len(projects)
+            }
 
-📊 Overall Statistics:
-• Total Sites Tracked: {stats['total_sites']}
-• Total Scrapes: {stats['total_scrapes']}
-• Total Optimizations: {stats['total_optimizations']}
-• Database Created: {stats['metadata']['created']}
-• Last Updated: {stats['metadata']['last_updated']}
-
-📂 Tracked Sites:
-"""
-            
-            sites = self.get_all_sites()
-            for domain, site_data in sites.items():
-                summary += f"\n🔗 {domain}\n"
-                summary += f"   First Scraped: {site_data['first_scraped']}\n"
-                summary += f"   Scrapes: {site_data['scrapes_count']}\n"
-                summary += f"   Optimizations: {site_data['optimizations_count']}\n"
-                summary += f"   Last Updated: {site_data['updated_at']}\n"
-            
-            summary += f"\n🕒 Recent Activities:\n"
-            for activity in stats['recent_activities'][:5]:
-                if activity['type'] == 'scrape':
-                    summary += f"   📄 Scraped {activity['site']} at {activity['timestamp']}\n"
-                else:
-                    summary += f"   🚀 Optimized {activity['site']} at {activity['timestamp']}\n"
-            
-            return summary
-            
-        except Exception as e:
-            print(f"Error exporting summary: {e}")
-            return "Error generating summary"
-
-# Global database instance
-db = Database()
-
-# Convenience functions
+# Legacy compatibility functions
 def add_scraped_site(url: str, scraped_data: Dict[str, Any], saved_directory: str, user_email: Optional[str] = None) -> bool:
-    """Add a scraped site to the database"""
-    return db.add_scraped_site(url, scraped_data, saved_directory, user_email)
+    """Legacy function for backward compatibility"""
+    db = GambixStrataDatabase()
+    
+    # Create user if email provided
+    user_id = None
+    if user_email:
+        user = db.get_user_by_email(user_email)
+        if not user:
+            user_id = db.create_user(user_email, f"User {user_email}", 'user')
+        else:
+            user_id = user['user_id']
+    
+    # Extract domain from URL
+    domain = urlparse(url).netloc
+    
+    # Create project if it doesn't exist
+    projects = db.get_user_projects(user_id) if user_id else []
+    project = next((p for p in projects if p['domain'] == domain), None)
+    
+    if not project and user_id:
+        project_id = db.create_project(user_id, domain, f"{domain} Website")
+    elif project:
+        project_id = project['project_id']
+    else:
+        return False
+    
+    # Add page data
+    page_data = {
+        'page_url': url,
+        'title': scraped_data.get('title', ''),
+        'word_count': scraped_data.get('word_count', 0),
+        'meta_description': scraped_data.get('meta_description', ''),
+        'h1_tags': scraped_data.get('h1_tags', []),
+        'images_count': scraped_data.get('images_count', 0),
+        'links_count': scraped_data.get('links_count', 0),
+        'status': 'healthy'
+    }
+    
+    db.add_page(project_id, page_data)
+    return True
 
 def add_optimized_site(url: str, user_profile: str, optimized_directory: str) -> bool:
-    """Add an optimized site to the database"""
-    return db.add_optimized_site(url, user_profile, optimized_directory)
-
-def is_site_scraped(url: str) -> bool:
-    """Check if a site has been scraped"""
-    return db.is_site_scraped(url)
+    """Legacy function for backward compatibility"""
+    db = GambixStrataDatabase()
+    
+    # This would need to be implemented based on your optimization logic
+    # For now, just return True
+    return True
 
 def get_site_stats() -> Dict[str, Any]:
-    """Get overall statistics"""
-    return db.get_site_stats()
+    """Legacy function for backward compatibility"""
+    db = GambixStrataDatabase()
+    
+    with sqlite3.connect(db.db_path) as conn:
+        cursor = conn.cursor()
+        
+        # Get total projects
+        cursor.execute('SELECT COUNT(*) FROM projects')
+        total_projects = cursor.fetchone()[0]
+        
+        # Get total pages
+        cursor.execute('SELECT COUNT(*) FROM pages')
+        total_pages = cursor.fetchone()[0]
+        
+        # Get total recommendations
+        cursor.execute('SELECT COUNT(*) FROM recommendations')
+        total_recommendations = cursor.fetchone()[0]
+        
+        return {
+            'total_projects': total_projects,
+            'total_pages': total_pages,
+            'total_recommendations': total_recommendations,
+            'database_type': 'Gambix Strata SQLite'
+        }
 
 def export_summary() -> str:
-    """Export a summary of all tracked sites"""
-    return db.export_summary()
+    """Legacy function for backward compatibility"""
+    stats = get_site_stats()
+    return f"""
+Gambix Strata Database Summary
+=============================
+Total Projects: {stats['total_projects']}
+Total Pages: {stats['total_pages']}
+Total Recommendations: {stats['total_recommendations']}
+Database Type: {stats['database_type']}
+"""
 
-def get_sites_by_user_email(user_email: str) -> List[Dict[str, Any]]:
-    """Get all sites scraped by a specific user email"""
-    return db.get_sites_by_user_email(user_email)
+def get_sites_by_user_email(user_email: str) -> List[Dict]:
+    """Legacy function for backward compatibility"""
+    db = GambixStrataDatabase()
+    user = db.get_user_by_email(user_email)
+    if user:
+        return db.get_user_projects(user['user_id'])
+    return []
 
 def get_all_sites() -> Dict[str, Any]:
-    """Get all tracked sites"""
-    return db.get_all_sites()
+    """Legacy function for backward compatibility"""
+    db = GambixStrataDatabase()
+    
+    with sqlite3.connect(db.db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT p.*, u.email as user_email
+            FROM projects p
+            JOIN users u ON p.user_id = u.user_id
+            ORDER BY p.created_at DESC
+        ''')
+        rows = cursor.fetchall()
+        columns = [description[0] for description in cursor.description]
+        
+        sites = []
+        for row in rows:
+            site_data = dict(zip(columns, row))
+            site_data['settings'] = db._deserialize_json(site_data['settings'])
+            sites.append(site_data)
+        
+        return {
+            'sites': sites,
+            'total': len(sites)
+        }
+
+# Initialize database instance
+db = GambixStrataDatabase()

@@ -2,6 +2,27 @@
 
 A comprehensive web scraping and analysis tool that extracts website content, performs SEO analysis, and stores data in SQLite database.
 
+## 🚀 Quick Start (Recommended)
+
+The easiest way to run this project is using Docker:
+
+```bash
+# 1. Clone the repository
+git clone <repository-url>
+cd strata_scraper
+
+# 2. Start the application with Docker
+docker compose up --build
+
+# 3. Access the application
+# Frontend: http://localhost:8080
+# Legacy API: http://localhost:8080/api
+# Gambix Strata API: http://localhost:8080/api/gambix
+
+# 4. (Optional) Run migration to set up new database schema
+python migrate_to_gambix_strata.py --sample
+```
+
 ## Features
 
 - **Web Scraping**: Extract HTML, CSS, JavaScript, and links from websites
@@ -12,7 +33,394 @@ A comprehensive web scraping and analysis tool that extracts website content, pe
 - **REST API**: Flask-based API for scraping and data retrieval
 - **Docker Support**: Containerized deployment with Docker Compose
 
-## Database Schema
+## 📋 Prerequisites
+
+### For Docker Deployment (Recommended)
+- Docker Desktop installed and running
+- Git (for cloning the repository)
+
+### For Local Development
+- Python 3.8+
+- pip (Python package manager)
+- Git (for cloning the repository)
+
+## 🛠️ Installation & Setup
+
+### Option 1: Docker Deployment (Recommended)
+
+This is the easiest and most reliable way to run the project:
+
+1. **Clone the repository:**
+   ```bash
+   git clone <repository-url>
+   cd strata_scraper
+   ```
+
+2. **Start the application:**
+   ```bash
+   docker compose up --build
+   ```
+
+3. **Access the application:**
+   - **Frontend**: http://localhost:8080
+   - **API Documentation**: http://localhost:8080/api
+   - **Health Check**: http://localhost:8080/api/health
+
+4. **Stop the application:**
+   ```bash
+   docker compose down
+   ```
+
+5. **Run in background:**
+   ```bash
+   docker compose up -d --build
+   ```
+
+### Option 2: Local Development
+
+1. **Clone the repository:**
+   ```bash
+   git clone <repository-url>
+   cd strata_scraper
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Run the application:**
+   ```bash
+   python server.py
+   ```
+
+4. **Access the application:**
+   - **Frontend**: http://localhost:8080
+   - **API**: http://localhost:8080/api
+
+## 🎯 How to Use
+
+### 1. Database Migration (New Users)
+
+If you're setting up the project for the first time or want to use the new Gambix Strata schema:
+
+```bash
+# Create new database with sample data
+python migrate_to_gambix_strata.py --sample
+
+# Or migrate from existing database
+python migrate_to_gambix_strata.py --old-db scraper_data.db --new-db gambix_strata.db
+```
+
+### 2. Gambix Strata API Usage
+
+The new Gambix Strata API provides comprehensive website optimization management:
+
+#### Create a User
+```bash
+curl -X POST http://localhost:8080/api/gambix/users \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "name": "John Doe",
+    "role": "user",
+    "preferences": {
+      "notifications": true,
+      "auto_optimize": false
+    }
+  }'
+```
+
+#### Create a Project
+```bash
+curl -X POST http://localhost:8080/api/gambix/projects \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "user-uuid",
+    "domain": "example.com",
+    "name": "Example Website",
+    "settings": {
+      "crawl_frequency": "daily",
+      "optimization_threshold": 70
+    }
+  }'
+```
+
+#### Add Site Health Data
+```bash
+curl -X POST http://localhost:8080/api/gambix/projects/project-uuid/health \
+  -H "Content-Type: application/json" \
+  -d '{
+    "overall_score": 75,
+    "technical_seo": 80,
+    "content_seo": 70,
+    "performance": 85,
+    "internal_linking": 90,
+    "visual_ux": 65,
+    "authority_backlinks": 60,
+    "total_impressions": 5000,
+    "total_engagements": 2000,
+    "total_conversions": 150,
+    "crawl_data": {
+      "healthy_pages": 15,
+      "broken_pages": 2,
+      "pages_with_issues": 3,
+      "total_pages": 20
+    }
+  }'
+```
+
+#### Get Dashboard Data
+```bash
+curl http://localhost:8080/api/gambix/dashboard/user-uuid
+```
+
+### 3. Basic Web Scraping
+
+#### Via API (Recommended)
+```bash
+# Scrape a website
+curl -X POST http://localhost:8080/api/scrape \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com",
+    "user_email": "your-email@example.com"
+  }'
+```
+
+#### Via Python Script
+```python
+from main import scrape_website
+
+# Scrape a website
+result = scrape_website("https://example.com", "your-email@example.com")
+print(f"Scraped: {result['url']}")
+print(f"Files saved to: {result['saved_directory']}")
+```
+
+### 2. View Scraped Data
+
+#### Check API Endpoints
+```bash
+# Get all scraped sites
+curl http://localhost:8080/api/tracker/sites
+
+# Get statistics
+curl http://localhost:8080/api/tracker/stats
+
+# Get summary
+curl http://localhost:8080/api/tracker/summary
+
+# List scraped files
+curl http://localhost:8080/api/files
+```
+
+#### Check Local Files
+```bash
+# View scraped content
+ls -la scraped_data/
+
+# View database
+ls -la data/scraper_data.db
+
+# View logs
+ls -la logs/
+```
+
+### 3. Database Operations
+
+```python
+from database import Database, get_site_stats, get_all_sites
+
+# Initialize database
+db = Database()
+
+# Get statistics
+stats = get_site_stats()
+print(f"Total sites scraped: {stats['total_sites']}")
+print(f"Total scrapes: {stats['total_scrapes']}")
+
+# Get all sites
+sites = get_all_sites()
+for site in sites['sites']:
+    print(f"Domain: {site['domain']}")
+    print(f"Last scraped: {site['last_scraped']}")
+```
+
+### 4. Testing the Application
+
+```bash
+# Test database functionality
+python test_database.py
+
+# Test scraping functionality
+python test_scraping.py
+
+# Test tracker functionality
+python test_tracker.py
+```
+
+## 📊 API Reference
+
+### Gambix Strata API Endpoints
+
+#### User Management
+- `POST /api/gambix/users` - Create a new user
+- `GET /api/gambix/users/<email>` - Get user by email
+
+#### Project Management
+- `POST /api/gambix/projects` - Create a new project
+- `GET /api/gambix/projects/<user_id>` - Get all projects for a user
+
+#### Site Health
+- `POST /api/gambix/projects/<project_id>/health` - Add site health metrics
+- `GET /api/gambix/projects/<project_id>/health` - Get latest site health data
+
+#### Page Management
+- `POST /api/gambix/projects/<project_id>/pages` - Add a page to a project
+- `GET /api/gambix/projects/<project_id>/pages` - Get all pages for a project
+
+#### Recommendations
+- `POST /api/gambix/projects/<project_id>/recommendations` - Add a recommendation
+- `GET /api/gambix/projects/<project_id>/recommendations` - Get project recommendations
+- `PUT /api/gambix/recommendations/<recommendation_id>/status` - Update recommendation status
+
+#### Alerts
+- `POST /api/gambix/alerts` - Create a new alert
+- `GET /api/gambix/alerts/<user_id>` - Get alerts for a user
+- `PUT /api/gambix/alerts/<alert_id>/dismiss` - Dismiss an alert
+
+#### Analytics
+- `GET /api/gambix/projects/<project_id>/statistics` - Get project statistics
+- `GET /api/gambix/dashboard/<user_id>` - Get dashboard data for a user
+
+### Legacy API Endpoints
+
+#### POST /api/scrape
+Scrape a website and store the data.
+
+**Request:**
+```json
+{
+  "url": "https://example.com",
+  "user_email": "user@example.com"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "url": "https://example.com",
+  "saved_directory": "scraped_data/example.com_20231201_123456",
+  "message": "Website scraped successfully"
+}
+```
+
+#### GET /api/tracker/stats
+Get overall statistics.
+
+**Response:**
+```json
+{
+  "total_sites": 15,
+  "total_scrapes": 45,
+  "total_optimizations": 8,
+  "recent_activity": "2023-12-01 12:34:56"
+}
+```
+
+#### GET /api/tracker/sites
+Get all tracked sites.
+
+**Response:**
+```json
+{
+  "sites": [
+    {
+      "id": 1,
+      "domain": "example.com",
+      "first_scraped": "2023-11-01 10:00:00",
+      "last_scraped": "2023-12-01 12:34:56",
+      "scrape_count": 3
+    }
+  ]
+}
+```
+
+#### GET /api/user-sites?email=user@example.com
+Get sites scraped by a specific user.
+
+#### GET /api/files
+List all scraped files and directories.
+
+#### GET /api/health
+Health check endpoint.
+
+### Error Handling
+
+All API endpoints return appropriate HTTP status codes:
+- `200`: Success
+- `400`: Bad Request
+- `404`: Not Found
+- `500`: Internal Server Error
+
+## 📁 File Structure
+
+```
+strata_scraper/
+├── main.py              # Main scraping logic
+├── server.py            # Flask API server
+├── database.py          # SQLite database operations
+├── site_tracker.py      # Legacy JSON tracker (deprecated)
+├── test_database.py     # Database testing script
+├── test_scraping.py     # Scraping testing script
+├── test_tracker.py      # Tracker testing script
+├── docker-compose.yml   # Docker configuration
+├── Dockerfile          # Docker image definition
+├── requirements.txt    # Python dependencies
+├── README.md          # This file
+├── data/              # Database directory (Docker)
+│   └── scraper_data.db # SQLite database file
+├── scraped_data/      # Scraped content files
+├── logs/              # Application logs
+└── optimized_sites/   # Optimized versions (if any)
+```
+
+## 🔍 What Gets Scraped
+
+### Content Extraction
+- **HTML Structure**: Complete HTML markup
+- **CSS Files**: External and inline stylesheets
+- **JavaScript**: External and inline scripts
+- **Images**: Image URLs and metadata
+- **Links**: Internal, external, and social media links
+
+### SEO Analysis
+- **Meta Tags**: Title, description, keywords, robots
+- **Open Graph**: Social media optimization tags
+- **Twitter Cards**: Twitter-specific meta tags
+- **Structured Data**: JSON-LD, Microdata, RDFa
+- **Headings**: H1-H6 hierarchy analysis
+- **Canonical URLs**: Duplicate content prevention
+- **Sitemaps**: XML sitemap detection
+
+### Analytics Detection
+- **Google Analytics**: GA4 and Universal Analytics
+- **Facebook Pixel**: Social media tracking
+- **Google Tag Manager**: GTM containers
+- **Hotjar**: User behavior tracking
+- **Mixpanel**: Event tracking
+- **Other Tools**: Various marketing and analytics platforms
+
+### Performance Metrics
+- **Word Count**: Content length analysis
+- **Link Count**: Internal/external link ratios
+- **Resource Count**: CSS, JS, image statistics
+- **Content Size**: Page size in MB
+- **Loading Indicators**: Performance hints
+
+## 🗄️ Database Schema
 
 The application uses SQLite with the following tables:
 
@@ -71,174 +479,7 @@ The application uses SQLite with the following tables:
 - `optimized_directory`: Directory where optimized files are saved
 - `optimization_type`: Type of optimization performed
 
-## Installation
-
-### Prerequisites
-- Python 3.8+
-- Docker and Docker Compose (for containerized deployment)
-
-### Local Development
-
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd strata_scraper
-```
-
-2. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-3. Run the application:
-```bash
-python server.py
-```
-
-### Docker Deployment
-
-1. Build and run with Docker Compose:
-```bash
-docker-compose up --build
-```
-
-2. Access the application:
-- Frontend: http://localhost:8080
-- API: http://localhost:8080/api
-
-## Usage
-
-### Command Line
-
-Run the main scraper directly:
-```bash
-python main.py
-```
-
-Test the database functionality:
-```bash
-python test_database.py
-```
-
-### API Endpoints
-
-#### Scrape Website
-```bash
-POST /api/scrape
-Content-Type: application/json
-
-{
-  "url": "https://example.com",
-  "user_email": "user@example.com"
-}
-```
-
-#### Get User Sites
-```bash
-GET /api/user-sites?email=user@example.com
-```
-
-#### Get Site Statistics
-```bash
-GET /api/tracker/stats
-```
-
-#### Get All Tracked Sites
-```bash
-GET /api/tracker/sites
-```
-
-#### Get Site Summary
-```bash
-GET /api/tracker/summary
-```
-
-#### List Scraped Files
-```bash
-GET /api/files
-```
-
-#### Health Check
-```bash
-GET /api/health
-```
-
-### Database Operations
-
-The application provides a comprehensive database interface:
-
-```python
-from database import Database, add_scraped_site, get_site_stats
-
-# Initialize database
-db = Database("scraper_data.db")
-
-# Add scraped site
-add_scraped_site(url, scraped_data, saved_directory, user_email)
-
-# Get statistics
-stats = get_site_stats()
-print(f"Total sites: {stats['total_sites']}")
-print(f"Total scrapes: {stats['total_scrapes']}")
-```
-
-## File Structure
-
-```
-strata_scraper/
-├── main.py              # Main scraping logic
-├── server.py            # Flask API server
-├── database.py          # SQLite database operations
-├── site_tracker.py      # Legacy JSON tracker (deprecated)
-├── test_database.py     # Database testing script
-├── docker-compose.yml   # Docker configuration
-├── Dockerfile          # Docker image definition
-├── requirements.txt    # Python dependencies
-├── README.md          # This file
-├── scraper_data.db    # SQLite database file
-├── scraped_sites/     # Scraped content files
-├── optimized_sites/   # Optimized versions
-└── logs/              # Application logs
-```
-
-## Data Storage
-
-### SQLite Database
-- **File**: `scraper_data.db`
-- **Purpose**: Structured data storage for sites, scrapes, SEO metadata, and analytics
-- **Persistence**: Mounted as volume in Docker for data persistence
-
-### File Storage
-- **Scraped Sites**: `scraped_sites/` directory with organized subdirectories
-- **Optimized Sites**: `optimized_sites/` directory for enhanced versions
-- **Logs**: `logs/` directory for application logs
-
-## Analysis Features
-
-### SEO Analysis
-- Meta tags extraction and analysis
-- Open Graph and Twitter Card detection
-- Structured data identification
-- Heading hierarchy analysis
-- Image optimization assessment
-- Link analysis (internal/external/social)
-- Content analysis (word count, keyword density)
-
-### Analytics Detection
-- Google Analytics (GA4 and Universal Analytics)
-- Facebook Pixel
-- Google Tag Manager
-- Hotjar
-- Mixpanel
-- Other tracking tools
-
-### Performance Insights
-- Page speed indicators
-- Resource optimization opportunities
-- Content quality assessment
-- SEO recommendations
-
-## Configuration
+## ⚙️ Configuration
 
 ### Environment Variables
 - `PORT`: Server port (default: 8080)
@@ -252,21 +493,121 @@ The `docker-compose.yml` file configures:
 - Health checks
 - Automatic restarts
 
-## Testing
+## 🧪 Testing
 
-Run the database test suite:
+### Run All Tests
 ```bash
+# Test database functionality
 python test_database.py
+
+# Test scraping functionality
+python test_scraping.py
+
+# Test tracker functionality
+python test_tracker.py
 ```
 
-This will test:
+### Test Database Operations
+The database test suite verifies:
 - Database initialization
 - Adding scraped sites
 - Adding optimizations
 - Statistics retrieval
 - Summary generation
 
-## Migration from JSON Tracker
+## 🔧 Troubleshooting
+
+### Common Issues
+
+#### Docker Issues
+```bash
+# If Docker daemon is not running
+open -a Docker
+
+# If port 8080 is already in use
+# Change the port in docker-compose.yml
+ports:
+  - "8081:8080"  # Use port 8081 instead
+```
+
+#### Database Issues
+```bash
+# Reset database (Docker)
+docker compose down
+rm -rf data/
+docker compose up --build
+
+# Reset database (Local)
+rm scraper_data.db
+python server.py
+```
+
+#### Permission Issues
+```bash
+# Fix directory permissions
+chmod -R 755 data/ logs/ scraped_data/
+```
+
+### Logs
+Check application logs:
+```bash
+# Docker logs
+docker compose logs
+
+# Local logs
+tail -f logs/app.log
+```
+
+## 📈 Use Cases
+
+### 1. SEO Analysis
+- Analyze competitor websites
+- Track SEO changes over time
+- Identify missing meta tags
+- Monitor structured data implementation
+
+### 2. Content Research
+- Extract content from multiple sources
+- Analyze content structure and quality
+- Track content updates
+- Monitor link building opportunities
+
+### 3. Analytics Research
+- Identify tracking tools used by competitors
+- Monitor analytics implementation
+- Track marketing technology adoption
+- Analyze user tracking patterns
+
+### 4. Performance Monitoring
+- Track website performance changes
+- Monitor resource optimization
+- Analyze loading speed factors
+- Identify optimization opportunities
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🆘 Support
+
+For issues and questions:
+1. Check the documentation above
+2. Review existing issues in the repository
+3. Create a new issue with detailed information including:
+   - Operating system
+   - Python/Docker version
+   - Error messages
+   - Steps to reproduce
+
+## 🔄 Migration from JSON Tracker
 
 The application has been migrated from JSON-based tracking to SQLite database:
 
@@ -274,23 +615,4 @@ The application has been migrated from JSON-based tracking to SQLite database:
 2. **New System**: `scraper_data.db` SQLite database
 3. **Benefits**: Better performance, data integrity, and query capabilities
 
-The legacy `site_tracker.py` is kept for reference but is no longer used by the application.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## License
-
-This project is licensed under the MIT License.
-
-## Support
-
-For issues and questions:
-1. Check the documentation
-2. Review existing issues
-3. Create a new issue with detailed information 
+The legacy `site_tracker.py` is kept for reference but is no longer used by the application. 

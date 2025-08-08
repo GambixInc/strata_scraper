@@ -22,7 +22,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Create necessary directories
-RUN mkdir -p logs strata_design
+RUN mkdir -p logs strata_design data
 
 # Create a simple frontend if it doesn't exist
 RUN echo '<!DOCTYPE html><html><head><title>Strata Scraper</title></head><body><h1>Strata Scraper API</h1><p>Use /api/scrape endpoint to scrape websites</p></body></html>' > strata_design/scraper_frontend.html

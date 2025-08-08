@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
 from main import simple_web_scraper, save_content_to_files, get_safe_filename
-from database import add_scraped_site, add_optimized_site, get_site_stats, export_summary, get_sites_by_user_email, get_all_sites
+from database import GambixStrataDatabase, add_scraped_site, add_optimized_site, get_site_stats, export_summary, get_sites_by_user_email, get_all_sites
 import json
 from datetime import datetime
 from flask_limiter import Limiter
@@ -571,19 +571,352 @@ def get_report(site, report_type):
     else:
         return jsonify({'error': 'Invalid report type'}), 400
 
+# Gambix Strata API Endpoints
+@app.route('/api/gambix/users', methods=['POST'])
+@limiter.limit("10 per minute")
+def create_user():
+    """Create a new user"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No JSON data provided'}), 400
+        
+        email = data.get('email')
+        name = data.get('name')
+        role = data.get('role', 'user')
+        preferences = data.get('preferences')
+        
+        if not email or not name:
+            return jsonify({'success': False, 'error': 'Email and name are required'}), 400
+        
+        db = GambixStrataDatabase()
+        user_id = db.create_user(email, name, role, preferences)
+        
+        return jsonify({
+            'success': True,
+            'user_id': user_id,
+            'message': 'User created successfully'
+        })
+    except Exception as e:
+        app.logger.error(f"Error creating user: {e}")
+        return jsonify({'success': False, 'error': 'Failed to create user'}), 500
+
+@app.route('/api/gambix/users/<email>', methods=['GET'])
+def get_user_by_email(email):
+    """Get user by email"""
+    try:
+        db = GambixStrataDatabase()
+        user = db.get_user_by_email(email)
+        
+        if not user:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        
+        return jsonify({
+            'success': True,
+            'user': user
+        })
+    except Exception as e:
+        app.logger.error(f"Error getting user: {e}")
+        return jsonify({'success': False, 'error': 'Failed to get user'}), 500
+
+@app.route('/api/gambix/projects', methods=['POST'])
+@limiter.limit("10 per minute")
+def create_project():
+    """Create a new project"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No JSON data provided'}), 400
+        
+        user_id = data.get('user_id')
+        domain = data.get('domain')
+        name = data.get('name')
+        settings = data.get('settings')
+        
+        if not user_id or not domain or not name:
+            return jsonify({'success': False, 'error': 'User ID, domain, and name are required'}), 400
+        
+        db = GambixStrataDatabase()
+        project_id = db.create_project(user_id, domain, name, settings)
+        
+        return jsonify({
+            'success': True,
+            'project_id': project_id,
+            'message': 'Project created successfully'
+        })
+    except Exception as e:
+        app.logger.error(f"Error creating project: {e}")
+        return jsonify({'success': False, 'error': 'Failed to create project'}), 500
+
+@app.route('/api/gambix/projects/<user_id>', methods=['GET'])
+def get_user_projects(user_id):
+    """Get all projects for a user"""
+    try:
+        db = GambixStrataDatabase()
+        projects = db.get_user_projects(user_id)
+        
+        return jsonify({
+            'success': True,
+            'projects': projects
+        })
+    except Exception as e:
+        app.logger.error(f"Error getting user projects: {e}")
+        return jsonify({'success': False, 'error': 'Failed to get user projects'}), 500
+
+@app.route('/api/gambix/projects/<project_id>/health', methods=['POST'])
+@limiter.limit("10 per minute")
+def add_site_health(project_id):
+    """Add site health metrics"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No JSON data provided'}), 400
+        
+        db = GambixStrataDatabase()
+        health_id = db.add_site_health(project_id, data)
+        
+        return jsonify({
+            'success': True,
+            'health_id': health_id,
+            'message': 'Site health data added successfully'
+        })
+    except Exception as e:
+        app.logger.error(f"Error adding site health: {e}")
+        return jsonify({'success': False, 'error': 'Failed to add site health data'}), 500
+
+@app.route('/api/gambix/projects/<project_id>/health', methods=['GET'])
+def get_site_health(project_id):
+    """Get site health data"""
+    try:
+        db = GambixStrataDatabase()
+        health_data = db.get_latest_site_health(project_id)
+        
+        if not health_data:
+            return jsonify({'success': False, 'error': 'No health data found'}), 404
+        
+        return jsonify({
+            'success': True,
+            'health_data': health_data
+        })
+    except Exception as e:
+        app.logger.error(f"Error getting site health: {e}")
+        return jsonify({'success': False, 'error': 'Failed to get site health data'}), 500
+
+@app.route('/api/gambix/projects/<project_id>/pages', methods=['POST'])
+@limiter.limit("10 per minute")
+def add_page(project_id):
+    """Add a page to a project"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No JSON data provided'}), 400
+        
+        db = GambixStrataDatabase()
+        page_id = db.add_page(project_id, data)
+        
+        return jsonify({
+            'success': True,
+            'page_id': page_id,
+            'message': 'Page added successfully'
+        })
+    except Exception as e:
+        app.logger.error(f"Error adding page: {e}")
+        return jsonify({'success': False, 'error': 'Failed to add page'}), 500
+
+@app.route('/api/gambix/projects/<project_id>/pages', methods=['GET'])
+def get_project_pages(project_id):
+    """Get all pages for a project"""
+    try:
+        db = GambixStrataDatabase()
+        pages = db.get_project_pages(project_id)
+        
+        return jsonify({
+            'success': True,
+            'pages': pages
+        })
+    except Exception as e:
+        app.logger.error(f"Error getting project pages: {e}")
+        return jsonify({'success': False, 'error': 'Failed to get project pages'}), 500
+
+@app.route('/api/gambix/projects/<project_id>/recommendations', methods=['POST'])
+@limiter.limit("10 per minute")
+def add_recommendation(project_id):
+    """Add a recommendation"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No JSON data provided'}), 400
+        
+        db = GambixStrataDatabase()
+        recommendation_id = db.add_recommendation(project_id, data)
+        
+        return jsonify({
+            'success': True,
+            'recommendation_id': recommendation_id,
+            'message': 'Recommendation added successfully'
+        })
+    except Exception as e:
+        app.logger.error(f"Error adding recommendation: {e}")
+        return jsonify({'success': False, 'error': 'Failed to add recommendation'}), 500
+
+@app.route('/api/gambix/projects/<project_id>/recommendations', methods=['GET'])
+def get_project_recommendations(project_id):
+    """Get recommendations for a project"""
+    try:
+        status = request.args.get('status', 'pending')
+        db = GambixStrataDatabase()
+        recommendations = db.get_project_recommendations(project_id, status)
+        
+        return jsonify({
+            'success': True,
+            'recommendations': recommendations
+        })
+    except Exception as e:
+        app.logger.error(f"Error getting recommendations: {e}")
+        return jsonify({'success': False, 'error': 'Failed to get recommendations'}), 500
+
+@app.route('/api/gambix/recommendations/<recommendation_id>/status', methods=['PUT'])
+def update_recommendation_status(recommendation_id):
+    """Update recommendation status"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No JSON data provided'}), 400
+        
+        status = data.get('status')
+        if not status:
+            return jsonify({'success': False, 'error': 'Status is required'}), 400
+        
+        db = GambixStrataDatabase()
+        db.update_recommendation_status(recommendation_id, status)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Recommendation status updated successfully'
+        })
+    except Exception as e:
+        app.logger.error(f"Error updating recommendation status: {e}")
+        return jsonify({'success': False, 'error': 'Failed to update recommendation status'}), 500
+
+@app.route('/api/gambix/alerts', methods=['POST'])
+@limiter.limit("10 per minute")
+def create_alert():
+    """Create a new alert"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No JSON data provided'}), 400
+        
+        user_id = data.get('user_id')
+        alert_data = {
+            'project_id': data.get('project_id'),
+            'type': data.get('type'),
+            'title': data.get('title'),
+            'description': data.get('description'),
+            'priority': data.get('priority', 'medium'),
+            'metadata': data.get('metadata')
+        }
+        
+        if not user_id or not alert_data['title'] or not alert_data['description']:
+            return jsonify({'success': False, 'error': 'User ID, title, and description are required'}), 400
+        
+        db = GambixStrataDatabase()
+        alert_id = db.create_alert(user_id, alert_data)
+        
+        return jsonify({
+            'success': True,
+            'alert_id': alert_id,
+            'message': 'Alert created successfully'
+        })
+    except Exception as e:
+        app.logger.error(f"Error creating alert: {e}")
+        return jsonify({'success': False, 'error': 'Failed to create alert'}), 500
+
+@app.route('/api/gambix/alerts/<user_id>', methods=['GET'])
+def get_user_alerts(user_id):
+    """Get alerts for a user"""
+    try:
+        status = request.args.get('status', 'active')
+        db = GambixStrataDatabase()
+        alerts = db.get_user_alerts(user_id, status)
+        
+        return jsonify({
+            'success': True,
+            'alerts': alerts
+        })
+    except Exception as e:
+        app.logger.error(f"Error getting user alerts: {e}")
+        return jsonify({'success': False, 'error': 'Failed to get user alerts'}), 500
+
+@app.route('/api/gambix/alerts/<alert_id>/dismiss', methods=['PUT'])
+def dismiss_alert(alert_id):
+    """Dismiss an alert"""
+    try:
+        db = GambixStrataDatabase()
+        db.dismiss_alert(alert_id)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Alert dismissed successfully'
+        })
+    except Exception as e:
+        app.logger.error(f"Error dismissing alert: {e}")
+        return jsonify({'success': False, 'error': 'Failed to dismiss alert'}), 500
+
+@app.route('/api/gambix/projects/<project_id>/statistics', methods=['GET'])
+def get_project_statistics(project_id):
+    """Get comprehensive statistics for a project"""
+    try:
+        db = GambixStrataDatabase()
+        stats = db.get_project_statistics(project_id)
+        
+        if not stats:
+            return jsonify({'success': False, 'error': 'Project not found'}), 404
+        
+        return jsonify({
+            'success': True,
+            'statistics': stats
+        })
+    except Exception as e:
+        app.logger.error(f"Error getting project statistics: {e}")
+        return jsonify({'success': False, 'error': 'Failed to get project statistics'}), 500
+
+@app.route('/api/gambix/dashboard/<user_id>', methods=['GET'])
+def get_dashboard_data(user_id):
+    """Get dashboard data for a user"""
+    try:
+        db = GambixStrataDatabase()
+        dashboard_data = db.get_dashboard_data(user_id)
+        
+        return jsonify({
+            'success': True,
+            'dashboard': dashboard_data
+        })
+    except Exception as e:
+        app.logger.error(f"Error getting dashboard data: {e}")
+        return jsonify({'success': False, 'error': 'Failed to get dashboard data'}), 500
+
 if __name__ == '__main__':
-    print("🌐 Starting Web Scraper Server...")
+    print("🌐 Starting Gambix Strata Web Scraper Server...")
     print(f"📱 Frontend will be available at: http://localhost:{PORT}")
-    print(f"🔧 API endpoint: http://localhost:{PORT}/api/scrape")
+    print(f"🔧 Legacy API endpoint: http://localhost:{PORT}/api/scrape")
     print(f"🚀 Optimize endpoint: http://localhost:{PORT}/api/optimize")
     print(f"📁 Files endpoint: http://localhost:{PORT}/api/files")
     print(f"📊 Tracker stats: http://localhost:{PORT}/api/tracker/stats")
     print(f"📋 Tracker summary: http://localhost:{PORT}/api/tracker/summary")
     print(f"💚 Health check: http://localhost:{PORT}/api/health")
-    print("\n📂 Files will be saved to:")
-    print("   - scraped_sites/ (original scraped content)")
+    print(f"\n🎯 Gambix Strata API Endpoints:")
+    print(f"   - Users: http://localhost:{PORT}/api/gambix/users")
+    print(f"   - Projects: http://localhost:{PORT}/api/gambix/projects")
+    print(f"   - Site Health: http://localhost:{PORT}/api/gambix/projects/<id>/health")
+    print(f"   - Pages: http://localhost:{PORT}/api/gambix/projects/<id>/pages")
+    print(f"   - Recommendations: http://localhost:{PORT}/api/gambix/projects/<id>/recommendations")
+    print(f"   - Alerts: http://localhost:{PORT}/api/gambix/alerts")
+    print(f"   - Dashboard: http://localhost:{PORT}/api/gambix/dashboard/<user_id>")
+    print(f"\n📂 Files will be saved to:")
+    print("   - scraped_data/ (original scraped content)")
     print("   - optimized_sites/ (optimized versions)")
-    print("   - scraper_data.db (SQLite database)")
+    print("   - data/gambix_strata.db (Gambix Strata SQLite database)")
     print("\nPress Ctrl+C to stop the server")
     
     app.run(debug=DEBUG, host=HOST, port=PORT) 

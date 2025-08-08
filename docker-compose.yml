@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   strata-scraper:
     build: .
@@ -15,8 +13,8 @@ services:
       - ./logs:/app/logs
       # Mount scraped data directory
       - ./scraped_data:/app/scraped_data
-      # Mount SQLite database for persistence
-      - ./scraper_data.db:/app/scraper_data.db
+      # Mount database directory for persistence
+      - ./data:/app/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
