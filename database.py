@@ -183,7 +183,6 @@ class GambixStrataDatabase:
             
             # Alerts indexes
             "CREATE INDEX IF NOT EXISTS idx_alerts_user_id ON alerts(user_id)",
-            "CREATE INDEX IF NOT EXISTS idx_alerts_project_id ON alerts(project_id)",
             "CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status)",
             "CREATE INDEX IF NOT EXISTS idx_alerts_priority ON alerts(priority)",
             
