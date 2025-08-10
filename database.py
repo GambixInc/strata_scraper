@@ -2,6 +2,7 @@ import sqlite3
 import json
 import os
 import uuid
+import bcrypt
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Union
 from urllib.parse import urlparse
@@ -28,12 +29,13 @@ class GambixStrataDatabase:
             # Enable foreign keys
             cursor.execute("PRAGMA foreign_keys = ON")
             
-            # Create users table
+            # Create users table with password field
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS users (
                     user_id TEXT PRIMARY KEY,
                     email TEXT UNIQUE NOT NULL,
                     name TEXT NOT NULL,
+                    password_hash TEXT,
                     role TEXT CHECK(role IN ('admin', 'user', 'viewer')) NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -105,16 +107,14 @@ class GambixStrataDatabase:
                 CREATE TABLE IF NOT EXISTS recommendations (
                     recommendation_id TEXT PRIMARY KEY,
                     project_id TEXT NOT NULL,
-                    page_url TEXT,
-                    category TEXT CHECK(category IN ('content_seo', 'technical_seo', 'performance', 'internal_linking', 'visual_ux', 'authority')),
+                    category TEXT NOT NULL,
                     issue TEXT NOT NULL,
                     recommendation TEXT NOT NULL,
-                    priority TEXT CHECK(priority IN ('high', 'medium', 'low')) DEFAULT 'medium',
-                    status TEXT CHECK(status IN ('pending', 'accepted', 'implemented', 'dismissed')) DEFAULT 'pending',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    implemented_at TIMESTAMP,
-                    impact_score INTEGER CHECK(impact_score >= 0 AND impact_score <= 100),
                     guidelines TEXT, -- JSON array
+                    status TEXT CHECK(status IN ('pending', 'accepted', 'dismissed')) DEFAULT 'pending',
+                    priority TEXT CHECK(priority IN ('low', 'medium', 'high', 'critical')) DEFAULT 'medium',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (project_id) REFERENCES projects(project_id)
                 )
             ''')
@@ -124,40 +124,32 @@ class GambixStrataDatabase:
                 CREATE TABLE IF NOT EXISTS alerts (
                     alert_id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,
-                    project_id TEXT,
-                    type TEXT CHECK(type IN ('low_site_health', 'high_priority_recommendation', 'crawl_complete')),
                     title TEXT NOT NULL,
                     description TEXT NOT NULL,
-                    priority TEXT CHECK(priority IN ('high', 'medium', 'low')) DEFAULT 'medium',
-                    status TEXT CHECK(status IN ('active', 'dismissed', 'resolved')) DEFAULT 'active',
+                    alert_type TEXT CHECK(alert_type IN ('info', 'warning', 'error', 'success')) DEFAULT 'info',
+                    priority TEXT CHECK(priority IN ('low', 'medium', 'high', 'critical')) DEFAULT 'medium',
+                    status TEXT CHECK(status IN ('active', 'dismissed')) DEFAULT 'active',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     dismissed_at TIMESTAMP,
-                    metadata TEXT, -- JSON string
-                    FOREIGN KEY (user_id) REFERENCES users(user_id),
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                )
+            ''')
+            
+            # Create optimizations table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS optimizations (
+                    optimization_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    optimization_type TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    changes_made TEXT, -- JSON string
+                    performance_impact TEXT, -- JSON string
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (project_id) REFERENCES projects(project_id)
                 )
             ''')
             
-            # Create optimization_history table
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS optimization_history (
-                    optimization_id TEXT PRIMARY KEY,
-                    project_id TEXT NOT NULL,
-                    page_url TEXT,
-                    recommendation_id TEXT,
-                    action TEXT NOT NULL,
-                    before_score INTEGER,
-                    after_score INTEGER,
-                    implemented_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    implemented_by TEXT,
-                    changes TEXT, -- JSON string
-                    FOREIGN KEY (project_id) REFERENCES projects(project_id),
-                    FOREIGN KEY (recommendation_id) REFERENCES recommendations(recommendation_id),
-                    FOREIGN KEY (implemented_by) REFERENCES users(user_id)
-                )
-            ''')
-            
-            # Create indexes
+            # Create indexes for better performance
             self._create_indexes(cursor)
             
             conn.commit()
@@ -196,9 +188,9 @@ class GambixStrataDatabase:
             "CREATE INDEX IF NOT EXISTS idx_alerts_priority ON alerts(priority)",
             
             # Optimization history indexes
-            "CREATE INDEX IF NOT EXISTS idx_optimization_history_project_id ON optimization_history(project_id)",
-            "CREATE INDEX IF NOT EXISTS idx_optimization_history_page_url ON optimization_history(page_url)",
-            "CREATE INDEX IF NOT EXISTS idx_optimization_history_implemented_at ON optimization_history(implemented_at)"
+            "CREATE INDEX IF NOT EXISTS idx_optimization_history_project_id ON optimizations(project_id)",
+            "CREATE INDEX IF NOT EXISTS idx_optimization_history_page_url ON optimizations(optimization_type)",
+            "CREATE INDEX IF NOT EXISTS idx_optimization_history_implemented_at ON optimizations(created_at)"
         ]
         
         for index_sql in indexes:
@@ -224,15 +216,19 @@ class GambixStrataDatabase:
             return None
     
     # User Management
-    def create_user(self, email: str, name: str, role: str = 'user', preferences: Dict = None) -> str:
+    def create_user(self, email: str, name: str, password: str = None, role: str = 'user', preferences: Dict = None) -> str:
         """Create a new user"""
         user_id = self._generate_id()
+        password_hash = None
+        if password:
+            password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO users (user_id, email, name, role, preferences)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (user_id, email, name, role, self._serialize_json(preferences)))
+                INSERT INTO users (user_id, email, name, password_hash, role, preferences)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (user_id, email, name, password_hash, role, self._serialize_json(preferences)))
             conn.commit()
         return user_id
     
@@ -261,6 +257,47 @@ class GambixStrataDatabase:
                 user_data['preferences'] = self._deserialize_json(user_data['preferences'])
                 return user_data
         return None
+
+    def authenticate_user(self, email: str, password: str) -> Optional[Dict]:
+        """Authenticate user with email and password"""
+        user = self.get_user_by_email(email)
+        if user and user.get('password_hash'):
+            if bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
+                # Update last login
+                self.update_user_login(user['user_id'])
+                # Remove password hash from response
+                user.pop('password_hash', None)
+                return user
+        return None
+
+    def update_user_profile(self, user_id: str, profile_data: Dict) -> bool:
+        """Update user profile information"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                update_fields = []
+                params = []
+                
+                if 'name' in profile_data:
+                    update_fields.append('name = ?')
+                    params.append(profile_data['name'])
+                
+                if 'preferences' in profile_data:
+                    update_fields.append('preferences = ?')
+                    params.append(self._serialize_json(profile_data['preferences']))
+                
+                if update_fields:
+                    update_fields.append('updated_at = CURRENT_TIMESTAMP')
+                    params.append(user_id)
+                    
+                    query = f"UPDATE users SET {', '.join(update_fields)} WHERE user_id = ?"
+                    cursor.execute(query, params)
+                    conn.commit()
+                    return True
+            return False
+        except Exception as e:
+            print(f"Error updating user profile: {e}")
+            return False
     
     def update_user_login(self, user_id: str):
         """Update user's last login time"""
@@ -451,18 +488,17 @@ class GambixStrataDatabase:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO recommendations (
-                    recommendation_id, project_id, page_url, category, issue,
-                    recommendation, priority, impact_score, guidelines
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    recommendation_id, project_id, category, issue,
+                    recommendation, guidelines, priority, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 recommendation_id, project_id,
-                recommendation_data.get('page_url'),
                 recommendation_data.get('category'),
                 recommendation_data.get('issue'),
                 recommendation_data.get('recommendation'),
+                self._serialize_json(recommendation_data.get('guidelines')),
                 recommendation_data.get('priority', 'medium'),
-                recommendation_data.get('impact_score'),
-                self._serialize_json(recommendation_data.get('guidelines'))
+                recommendation_data.get('status', 'pending')
             ))
             conn.commit()
         return recommendation_id
@@ -517,17 +553,15 @@ class GambixStrataDatabase:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO alerts (
-                    alert_id, user_id, project_id, type, title, description,
-                    priority, metadata
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    alert_id, user_id, title, description, alert_type, priority, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (
                 alert_id, user_id,
-                alert_data.get('project_id'),
-                alert_data.get('type'),
                 alert_data.get('title'),
                 alert_data.get('description'),
+                alert_data.get('alert_type', 'info'),
                 alert_data.get('priority', 'medium'),
-                self._serialize_json(alert_data.get('metadata'))
+                alert_data.get('status', 'active')
             ))
             conn.commit()
         return alert_id
@@ -546,7 +580,6 @@ class GambixStrataDatabase:
             alerts = []
             for row in rows:
                 alert_data = dict(zip(columns, row))
-                alert_data['metadata'] = self._deserialize_json(alert_data['metadata'])
                 alerts.append(alert_data)
             return alerts
     
@@ -568,19 +601,16 @@ class GambixStrataDatabase:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO optimization_history (
-                    optimization_id, project_id, page_url, recommendation_id,
-                    action, before_score, after_score, implemented_by, changes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO optimizations (
+                    optimization_id, project_id, optimization_type, description,
+                    changes_made, performance_impact
+                ) VALUES (?, ?, ?, ?, ?, ?)
             ''', (
                 optimization_id, project_id,
-                optimization_data.get('page_url'),
-                optimization_data.get('recommendation_id'),
-                optimization_data.get('action'),
-                optimization_data.get('before_score'),
-                optimization_data.get('after_score'),
-                optimization_data.get('implemented_by'),
-                self._serialize_json(optimization_data.get('changes'))
+                optimization_data.get('optimization_type'),
+                optimization_data.get('description'),
+                self._serialize_json(optimization_data.get('changes_made')),
+                self._serialize_json(optimization_data.get('performance_impact'))
             ))
             conn.commit()
         return optimization_id
@@ -590,9 +620,9 @@ class GambixStrataDatabase:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT * FROM optimization_history 
+                SELECT * FROM optimizations 
                 WHERE project_id = ? 
-                ORDER BY implemented_at DESC 
+                ORDER BY created_at DESC 
                 LIMIT ?
             ''', (project_id, limit))
             rows = cursor.fetchall()
@@ -600,7 +630,8 @@ class GambixStrataDatabase:
             history = []
             for row in rows:
                 opt_data = dict(zip(columns, row))
-                opt_data['changes'] = self._deserialize_json(opt_data['changes'])
+                opt_data['changes_made'] = self._deserialize_json(opt_data['changes_made'])
+                opt_data['performance_impact'] = self._deserialize_json(opt_data['performance_impact'])
                 history.append(opt_data)
             return history
     

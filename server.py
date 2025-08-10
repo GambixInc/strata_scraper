@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from flask_talisman import Talisman
 import logging
 from logging.handlers import RotatingFileHandler
+from auth import require_auth, require_role
 
 import sentry_sdk
 
@@ -64,14 +65,80 @@ if not app.debug:
     app.logger.setLevel(logging.INFO)
     app.logger.info('Web Scraper startup')
 
-# Serve static files (HTML, CSS, JS)
-@app.route('/', defaults={'path': ''})
-@app.route('/<path:path>')
-def serve_react_app(path):
-    if path.startswith('api/') or path.startswith('strata_design/') or path.startswith('static/'):
-        # Let other routes handle API and static asset requests
-        return app.send_static_file(path)
-    return send_from_directory('strata_design', 'index.html')
+# User Profile Endpoints (for AWS Cognito authenticated users)
+@app.route('/api/user/profile', methods=['GET'])
+@require_auth
+def get_user_profile():
+    """Get current user profile"""
+    try:
+        user_id = request.current_user['user_id']
+        email = request.current_user['email']
+        
+        db = GambixStrataDatabase()
+        
+        # Try to get user from database first
+        user_data = db.get_user_by_email(email)
+        
+        if not user_data:
+            # Create user in database if they don't exist
+            user_id = db.create_user(email, request.current_user['name'])
+            user_data = db.get_user_by_email(email)
+        
+        if user_data:
+            user_data.pop('password_hash', None)  # Remove password hash
+            return jsonify({
+                'success': True,
+                'data': user_data
+            })
+        else:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+            
+    except Exception as e:
+        app.logger.error(f"Error getting user profile: {e}")
+        return jsonify({'success': False, 'error': 'Failed to get user profile'}), 500
+
+@app.route('/api/user/profile', methods=['PUT'])
+@require_auth
+def update_user_profile():
+    """Update current user profile"""
+    try:
+        user_id = request.current_user['user_id']
+        email = request.current_user['email']
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'success': False, 'error': 'No JSON data provided'}), 400
+        
+        db = GambixStrataDatabase()
+        
+        # Get user from database
+        user_data = db.get_user_by_email(email)
+        if not user_data:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        
+        success = db.update_user_profile(user_data['user_id'], data)
+        
+        if success:
+            # Get updated user data
+            updated_user = db.get_user_by_email(email)
+            if updated_user:
+                updated_user.pop('password_hash', None)
+                return jsonify({
+                    'success': True,
+                    'message': 'Profile updated successfully',
+                    'data': updated_user
+                })
+        
+        return jsonify({'success': False, 'error': 'Failed to update profile'}), 500
+        
+    except Exception as e:
+        app.logger.error(f"Error updating user profile: {e}")
+        return jsonify({'success': False, 'error': 'Failed to update profile'}), 500
+
+# API Endpoints (must come before catch-all route)
+
+
+
 
 @app.route('/api/scrape', methods=['POST'])
 @limiter.limit("10 per minute")  # Limit scraping requests
@@ -571,6 +638,8 @@ def get_report(site, report_type):
     else:
         return jsonify({'error': 'Invalid report type'}), 400
 
+
+
 # Gambix Strata API Endpoints
 @app.route('/api/gambix/users', methods=['POST'])
 @limiter.limit("10 per minute")
@@ -619,7 +688,8 @@ def get_user_by_email(email):
         app.logger.error(f"Error getting user: {e}")
         return jsonify({'success': False, 'error': 'Failed to get user'}), 500
 
-@app.route('/api/gambix/projects', methods=['POST'])
+@app.route('/api/projects', methods=['POST'])
+@require_auth
 @limiter.limit("10 per minute")
 def create_project():
     """Create a new project"""
@@ -628,36 +698,79 @@ def create_project():
         if not data:
             return jsonify({'success': False, 'error': 'No JSON data provided'}), 400
         
-        user_id = data.get('user_id')
-        domain = data.get('domain')
-        name = data.get('name')
-        settings = data.get('settings')
+        email = request.current_user['email']
+        domain = data.get('websiteUrl')  # Frontend sends websiteUrl
+        name = data.get('name') or domain  # Use domain as name if not provided
+        category = data.get('category')
+        description = data.get('description')
         
-        if not user_id or not domain or not name:
-            return jsonify({'success': False, 'error': 'User ID, domain, and name are required'}), 400
+        # Create settings object with category and description
+        settings = {
+            'category': category,
+            'description': description
+        }
+        
+        if not domain:
+            return jsonify({'success': False, 'error': 'Website URL is required'}), 400
         
         db = GambixStrataDatabase()
+        
+        # Get or create user in database
+        user_data = db.get_user_by_email(email)
+        if not user_data:
+            user_id = db.create_user(email, request.current_user['name'])
+        else:
+            user_id = user_data['user_id']
+        
         project_id = db.create_project(user_id, domain, name, settings)
         
         return jsonify({
             'success': True,
-            'project_id': project_id,
-            'message': 'Project created successfully'
+            'data': {
+                'project_id': project_id,
+                'message': 'Project created successfully'
+            }
         })
     except Exception as e:
         app.logger.error(f"Error creating project: {e}")
         return jsonify({'success': False, 'error': 'Failed to create project'}), 500
 
-@app.route('/api/gambix/projects/<user_id>', methods=['GET'])
-def get_user_projects(user_id):
-    """Get all projects for a user"""
+@app.route('/api/projects', methods=['GET'])
+@require_auth
+def get_user_projects():
+    """Get all projects for current user"""
     try:
+        email = request.current_user['email']
         db = GambixStrataDatabase()
-        projects = db.get_user_projects(user_id)
+        
+        # Get user from database
+        user_data = db.get_user_by_email(email)
+        if not user_data:
+            return jsonify({
+                'success': True,
+                'data': []  # Return empty list for new users
+            })
+        
+        projects = db.get_user_projects(user_data['user_id'])
+        
+        # Transform projects to match frontend expectations
+        transformed_projects = []
+        for project in projects:
+            transformed_project = {
+                'id': project['project_id'],
+                'url': project['domain'],
+                'icon': 'fas fa-globe',
+                'status': project['status'],
+                'healthScore': project.get('overall_score', 0),
+                'recommendations': 0,  # Will be calculated later
+                'autoOptimize': project.get('auto_optimize', False),
+                'lastUpdated': project.get('last_health_check', project['updated_at'])
+            }
+            transformed_projects.append(transformed_project)
         
         return jsonify({
             'success': True,
-            'projects': projects
+            'data': transformed_projects
         })
     except Exception as e:
         app.logger.error(f"Error getting user projects: {e}")
@@ -881,9 +994,42 @@ def get_project_statistics(project_id):
         app.logger.error(f"Error getting project statistics: {e}")
         return jsonify({'success': False, 'error': 'Failed to get project statistics'}), 500
 
+@app.route('/api/dashboard', methods=['GET'])
+@require_auth
+def get_dashboard_data():
+    """Get dashboard data for current user"""
+    try:
+        email = request.current_user['email']
+        db = GambixStrataDatabase()
+        
+        # Get user from database
+        user_data = db.get_user_by_email(email)
+        if not user_data:
+            # Return empty dashboard for new users
+            return jsonify({
+                'success': True,
+                'data': {
+                    'total_projects': 0,
+                    'active_projects': 0,
+                    'total_health_score': 0,
+                    'recent_activity': [],
+                    'alerts': []
+                }
+            })
+        
+        dashboard_data = db.get_dashboard_data(user_data['user_id'])
+        
+        return jsonify({
+            'success': True,
+            'data': dashboard_data
+        })
+    except Exception as e:
+        app.logger.error(f"Error getting dashboard data: {e}")
+        return jsonify({'success': False, 'error': 'Failed to get dashboard data'}), 500
+
 @app.route('/api/gambix/dashboard/<user_id>', methods=['GET'])
-def get_dashboard_data(user_id):
-    """Get dashboard data for a user"""
+def get_dashboard_data_legacy(user_id):
+    """Get dashboard data for a user (legacy endpoint)"""
     try:
         db = GambixStrataDatabase()
         dashboard_data = db.get_dashboard_data(user_id)
@@ -895,6 +1041,15 @@ def get_dashboard_data(user_id):
     except Exception as e:
         app.logger.error(f"Error getting dashboard data: {e}")
         return jsonify({'success': False, 'error': 'Failed to get dashboard data'}), 500
+
+# Serve static files (HTML, CSS, JS) - Must be at the end
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_react_app(path):
+    if path.startswith('api/') or path.startswith('strata_design/') or path.startswith('static/'):
+        # Let other routes handle API and static asset requests
+        return app.send_static_file(path)
+    return send_from_directory('strata_design', 'index.html')
 
 if __name__ == '__main__':
     print("🌐 Starting Gambix Strata Web Scraper Server...")
