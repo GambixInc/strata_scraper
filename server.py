@@ -81,7 +81,9 @@ def get_user_profile():
         
         if not user_data:
             # Create user in database if they don't exist
-            user_id = db.create_user(email, request.current_user['name'])
+            # Ensure we have a valid name (fallback to email if name is empty)
+            user_name = request.current_user.get('name') or email
+            user_id = db.create_user(email, user_name)
             user_data = db.get_user_by_email(email)
         
         if user_data:
@@ -718,7 +720,9 @@ def create_project():
         # Get or create user in database
         user_data = db.get_user_by_email(email)
         if not user_data:
-            user_id = db.create_user(email, request.current_user['name'])
+            # Ensure we have a valid name (fallback to email if name is empty)
+            user_name = request.current_user.get('name') or email
+            user_id = db.create_user(email, user_name)
         else:
             user_id = user_data['user_id']
         

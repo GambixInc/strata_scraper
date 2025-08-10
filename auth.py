@@ -17,10 +17,32 @@ def verify_cognito_token(token: str) -> Optional[Dict[str, Any]]:
         payload = jwt.decode(token, options={"verify_signature": False})
         
         # Extract user information from Cognito token
+        # Cognito tokens can have different field names depending on the token type
+        user_id = payload.get('sub') or payload.get('user_id')
+        
+        # Try different possible email field names
+        email = (payload.get('email') or 
+                payload.get('cognito:username') or 
+                payload.get('username') or
+                payload.get('preferred_username'))
+        
+        # Try different possible name field names
+        name = (payload.get('name') or 
+               payload.get('given_name') or 
+               payload.get('cognito:username') or
+               email)  # Fallback to email if no name
+        
+        # Ensure we have required fields
+        if not user_id:
+            return None
+            
+        if not email:
+            return None
+        
         user_data = {
-            'user_id': payload.get('sub'),
-            'email': payload.get('email'),
-            'name': payload.get('name', payload.get('email')),
+            'user_id': user_id,
+            'email': email,
+            'name': name,
             'role': 'user'  # Default role
         }
         
@@ -28,6 +50,8 @@ def verify_cognito_token(token: str) -> Optional[Dict[str, Any]]:
     except jwt.ExpiredSignatureError:
         return None
     except jwt.InvalidTokenError:
+        return None
+    except Exception:
         return None
 
 def get_token_from_header() -> Optional[str]:
