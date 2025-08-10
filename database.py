@@ -845,5 +845,5 @@ def get_all_sites() -> Dict[str, Any]:
             'total': len(sites)
         }
 
-# Initialize database instance
-db = GambixStrataDatabase()
+# Initialize database instance - commented out to avoid startup errors
+# db = GambixStrataDatabase()

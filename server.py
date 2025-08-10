@@ -36,7 +36,7 @@ CORS(app)  # Enable CORS for all routes
 limiter = Limiter(
     app=app,
     key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"]
+    default_limits=["10000 per day", "1000 per hour"]  # Very lenient for development
 )
 
 # Configure security headers
@@ -141,7 +141,7 @@ def update_user_profile():
 
 
 @app.route('/api/scrape', methods=['POST'])
-@limiter.limit("10 per minute")  # Limit scraping requests
+# @limiter.limit("10 per minute")  # Limit scraping requests - temporarily disabled
 def scrape_website():
     """
     API endpoint to scrape a website
@@ -642,7 +642,7 @@ def get_report(site, report_type):
 
 # Gambix Strata API Endpoints
 @app.route('/api/gambix/users', methods=['POST'])
-@limiter.limit("10 per minute")
+# @limiter.limit("10 per minute")  # Temporarily disabled
 def create_user():
     """Create a new user"""
     try:
@@ -690,7 +690,7 @@ def get_user_by_email(email):
 
 @app.route('/api/projects', methods=['POST'])
 @require_auth
-@limiter.limit("10 per minute")
+# @limiter.limit("10 per minute")  # Temporarily disabled
 def create_project():
     """Create a new project"""
     try:
@@ -737,6 +737,7 @@ def create_project():
 
 @app.route('/api/projects', methods=['GET'])
 @require_auth
+# Removed rate limiting for frequently called endpoint
 def get_user_projects():
     """Get all projects for current user"""
     try:
@@ -777,7 +778,7 @@ def get_user_projects():
         return jsonify({'success': False, 'error': 'Failed to get user projects'}), 500
 
 @app.route('/api/gambix/projects/<project_id>/health', methods=['POST'])
-@limiter.limit("10 per minute")
+# @limiter.limit("10 per minute")  # Temporarily disabled
 def add_site_health(project_id):
     """Add site health metrics"""
     try:
@@ -816,7 +817,7 @@ def get_site_health(project_id):
         return jsonify({'success': False, 'error': 'Failed to get site health data'}), 500
 
 @app.route('/api/gambix/projects/<project_id>/pages', methods=['POST'])
-@limiter.limit("10 per minute")
+# @limiter.limit("10 per minute")  # Temporarily disabled
 def add_page(project_id):
     """Add a page to a project"""
     try:
@@ -852,7 +853,7 @@ def get_project_pages(project_id):
         return jsonify({'success': False, 'error': 'Failed to get project pages'}), 500
 
 @app.route('/api/gambix/projects/<project_id>/recommendations', methods=['POST'])
-@limiter.limit("10 per minute")
+# @limiter.limit("10 per minute")  # Temporarily disabled
 def add_recommendation(project_id):
     """Add a recommendation"""
     try:
@@ -912,7 +913,7 @@ def update_recommendation_status(recommendation_id):
         return jsonify({'success': False, 'error': 'Failed to update recommendation status'}), 500
 
 @app.route('/api/gambix/alerts', methods=['POST'])
-@limiter.limit("10 per minute")
+# @limiter.limit("10 per minute")  # Temporarily disabled
 def create_alert():
     """Create a new alert"""
     try:
@@ -996,6 +997,7 @@ def get_project_statistics(project_id):
 
 @app.route('/api/dashboard', methods=['GET'])
 @require_auth
+# Removed rate limiting for frequently called endpoint
 def get_dashboard_data():
     """Get dashboard data for current user"""
     try:
