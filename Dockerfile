@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
     g++ \
     libxml2-dev \
     libxslt-dev \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
@@ -37,7 +38,7 @@ ENV DEBUG=False
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/api/health || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/api/health || exit 1
 
 # Run the application
 CMD ["python", "server.py"] 
