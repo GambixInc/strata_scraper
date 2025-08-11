@@ -90,7 +90,7 @@ sleep 10
 
 # Check health
 echo "🏥 Checking application health..."
-if curl -f http://localhost:8080/api/health > /dev/null 2>&1; then
+if curl -f http://localhost:80/api/health > /dev/null 2>&1; then
     echo "✅ Application is healthy!"
 else
     echo "❌ Application health check failed. Check logs with: docker-compose logs"
