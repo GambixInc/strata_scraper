@@ -2,8 +2,9 @@ services:
   strata-scraper:
     build: .
     container_name: strata-scraper
-    ports:
-      - "8080:8080"
+    # This port is not exposed to the outside world, only to the nginx container
+    # ports:
+    #  - "8080:8080"
     environment:
       - PORT=8080
       - HOST=0.0.0.0
@@ -11,3 +12,21 @@ services:
       - ./logs:/app/logs
       - ./data:/app/data
     restart: unless-stopped
+    profiles:
+      - default
+      - production
+
+  nginx:
+    image: nginx:alpine
+    container_name: strata-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - strata-scraper
+    restart: unless-stopped
+    profiles:
+      - production
