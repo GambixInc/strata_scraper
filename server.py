@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
+import sqlite3
 from main import simple_web_scraper, save_content_to_files, get_safe_filename
 from database import GambixStrataDatabase, add_scraped_site, add_optimized_site, get_site_stats, export_summary, get_sites_by_user_email, get_all_sites
 import json
@@ -736,7 +737,16 @@ def create_project():
             return jsonify({'success': False, 'error': 'No JSON data provided'}), 400
         
         email = request.current_user['email']
-        domain = data.get('websiteUrl')  # Frontend sends websiteUrl
+        raw_domain = data.get('websiteUrl')  # Frontend sends websiteUrl
+        
+        # Normalize domain by removing protocol and www
+        from urllib.parse import urlparse
+        parsed = urlparse(raw_domain)
+        domain = parsed.netloc.replace('www.', '') if parsed.netloc else raw_domain
+        
+        # Ensure domain is properly normalized (remove trailing slashes)
+        domain = domain.rstrip('/')
+        
         name = data.get('name') or domain  # Use domain as name if not provided
         category = data.get('category')
         description = data.get('description')
@@ -806,7 +816,8 @@ def create_project():
             'success': True,
             'data': {
                 'project_id': project_id,
-                'message': 'Project created successfully and website scraped'
+                'message': 'Project created successfully and website scraped',
+                'already_exists': False
             }
         })
     except Exception as e:

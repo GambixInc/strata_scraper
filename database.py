@@ -58,7 +58,8 @@ class GambixStrataDatabase:
                     last_crawl TIMESTAMP,
                     auto_optimize BOOLEAN DEFAULT 0,
                     settings TEXT, -- JSON string
-                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                    FOREIGN KEY (user_id) REFERENCES users(user_id),
+                    UNIQUE(user_id, domain)
                 )
             ''')
             
@@ -208,6 +209,39 @@ class GambixStrataDatabase:
             if 'impact_score' not in columns:
                 cursor.execute("ALTER TABLE recommendations ADD COLUMN impact_score INTEGER DEFAULT 50")
                 print("Added impact_score column to recommendations table")
+            
+            # Normalize existing domains by removing protocol and www
+            cursor.execute("SELECT project_id, domain FROM projects")
+            projects = cursor.fetchall()
+            
+            for project_id, old_domain in projects:
+                # Normalize domain
+                from urllib.parse import urlparse
+                parsed = urlparse(old_domain)
+                new_domain = parsed.netloc.replace('www.', '') if parsed.netloc else old_domain
+                
+                if new_domain != old_domain:
+                    cursor.execute("UPDATE projects SET domain = ? WHERE project_id = ?", (new_domain, project_id))
+                    print(f"Normalized domain: {old_domain} -> {new_domain}")
+            
+            # Handle duplicate projects by keeping only the most recent one per user/domain
+            cursor.execute("""
+                DELETE FROM projects 
+                WHERE project_id NOT IN (
+                    SELECT MAX(project_id) 
+                    FROM projects 
+                    GROUP BY user_id, domain
+                )
+            """)
+            print("Removed duplicate projects, keeping most recent ones")
+            
+            # Add unique constraint if it doesn't exist
+            cursor.execute("PRAGMA index_list(projects)")
+            indexes = [index[1] for index in cursor.fetchall()]
+            if 'idx_projects_user_domain_unique' not in indexes:
+                cursor.execute("CREATE UNIQUE INDEX idx_projects_user_domain_unique ON projects(user_id, domain)")
+                print("Added unique constraint on user_id and domain")
+                
         except Exception as e:
             print(f"Migration error: {e}")
     
@@ -326,16 +360,54 @@ class GambixStrataDatabase:
     
     # Project Management
     def create_project(self, user_id: str, domain: str, name: str, settings: Dict = None) -> str:
-        """Create a new project"""
-        project_id = self._generate_id()
+        """Create a new project or return existing project for same domain"""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
+            
+            # Check if project already exists for this user and domain
             cursor.execute('''
-                INSERT INTO projects (project_id, user_id, domain, name, settings)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (project_id, user_id, domain, name, self._serialize_json(settings)))
-            conn.commit()
-        return project_id
+                SELECT project_id FROM projects 
+                WHERE user_id = ? AND domain = ?
+            ''', (user_id, domain))
+            
+            existing_project = cursor.fetchone()
+            
+            if existing_project:
+                # Project already exists, return existing project ID
+                project_id = existing_project[0]
+                
+                # Update the existing project with new settings if provided
+                if settings:
+                    cursor.execute('''
+                        UPDATE projects 
+                        SET name = ?, settings = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE project_id = ?
+                    ''', (name, self._serialize_json(settings), project_id))
+                    conn.commit()
+                
+                return project_id
+            else:
+                # Create new project
+                project_id = self._generate_id()
+                try:
+                    cursor.execute('''
+                        INSERT INTO projects (project_id, user_id, domain, name, settings)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (project_id, user_id, domain, name, self._serialize_json(settings)))
+                    conn.commit()
+                    return project_id
+                except sqlite3.IntegrityError:
+                    # If we get here, it means another process created the project between our check and insert
+                    # Get the existing project ID
+                    cursor.execute('''
+                        SELECT project_id FROM projects 
+                        WHERE user_id = ? AND domain = ?
+                    ''', (user_id, domain))
+                    existing = cursor.fetchone()
+                    if existing:
+                        return existing[0]
+                    else:
+                        raise Exception("Failed to create project due to constraint violation")
     
     def get_user_projects(self, user_id: str) -> List[Dict]:
         """Get all projects for a user"""
@@ -372,6 +444,36 @@ class GambixStrataDatabase:
                 project_data = dict(zip(columns, row))
                 project_data['settings'] = self._deserialize_json(project_data['settings'])
                 return project_data
+        return None
+    
+    def get_project_by_user_and_domain(self, user_id: str, domain: str) -> Optional[Dict]:
+        """Get project by user ID and domain (with domain normalization)"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Normalize the input domain
+            from urllib.parse import urlparse
+            parsed = urlparse(domain)
+            normalized_domain = parsed.netloc.replace('www.', '') if parsed.netloc else domain
+            
+            # Get all projects for this user
+            cursor.execute('SELECT * FROM projects WHERE user_id = ?', (user_id,))
+            rows = cursor.fetchall()
+            
+            for row in rows:
+                columns = [description[0] for description in cursor.description]
+                project_data = dict(zip(columns, row))
+                
+                # Normalize the stored domain
+                stored_domain = project_data['domain']
+                parsed_stored = urlparse(stored_domain)
+                normalized_stored = parsed_stored.netloc.replace('www.', '') if parsed_stored.netloc else stored_domain
+                
+                # Compare normalized domains
+                if normalized_domain == normalized_stored:
+                    project_data['settings'] = self._deserialize_json(project_data['settings'])
+                    return project_data
+            
         return None
     
     def delete_project(self, project_id: str) -> bool:
