@@ -58,6 +58,7 @@ class GambixStrataDatabase:
                     last_crawl TIMESTAMP,
                     auto_optimize BOOLEAN DEFAULT 0,
                     settings TEXT, -- JSON string
+                    scraped_files_path TEXT, -- Path to scraped files directory
                     FOREIGN KEY (user_id) REFERENCES users(user_id),
                     UNIQUE(user_id, domain)
                 )
@@ -210,37 +211,57 @@ class GambixStrataDatabase:
                 cursor.execute("ALTER TABLE recommendations ADD COLUMN impact_score INTEGER DEFAULT 50")
                 print("Added impact_score column to recommendations table")
             
-            # Normalize existing domains by removing protocol and www
-            cursor.execute("SELECT project_id, domain FROM projects")
-            projects = cursor.fetchall()
+            # Add scraped_files_path column to projects table if it doesn't exist
+            cursor.execute("PRAGMA table_info(projects)")
+            project_columns = [column[1] for column in cursor.fetchall()]
+            if 'scraped_files_path' not in project_columns:
+                cursor.execute("ALTER TABLE projects ADD COLUMN scraped_files_path TEXT")
+                print("Added scraped_files_path column to projects table")
             
-            for project_id, old_domain in projects:
-                # Normalize domain
-                from urllib.parse import urlparse
-                parsed = urlparse(old_domain)
-                new_domain = parsed.netloc.replace('www.', '') if parsed.netloc else old_domain
+            # Only run domain normalization and duplicate removal if there are existing projects
+            cursor.execute("SELECT COUNT(*) FROM projects")
+            project_count = cursor.fetchone()[0]
+            
+            if project_count > 0:
+                # Normalize existing domains by removing protocol and www
+                cursor.execute("SELECT project_id, domain FROM projects")
+                projects = cursor.fetchall()
                 
-                if new_domain != old_domain:
-                    cursor.execute("UPDATE projects SET domain = ? WHERE project_id = ?", (new_domain, project_id))
-                    print(f"Normalized domain: {old_domain} -> {new_domain}")
-            
-            # Handle duplicate projects by keeping only the most recent one per user/domain
-            cursor.execute("""
-                DELETE FROM projects 
-                WHERE project_id NOT IN (
-                    SELECT MAX(project_id) 
-                    FROM projects 
-                    GROUP BY user_id, domain
-                )
-            """)
-            print("Removed duplicate projects, keeping most recent ones")
+                for project_id, old_domain in projects:
+                    # Normalize domain
+                    from urllib.parse import urlparse
+                    parsed = urlparse(old_domain)
+                    new_domain = parsed.netloc.replace('www.', '') if parsed.netloc else old_domain
+                    
+                    if new_domain != old_domain:
+                        cursor.execute("UPDATE projects SET domain = ? WHERE project_id = ?", (new_domain, project_id))
+                        print(f"Normalized domain: {old_domain} -> {new_domain}")
+                
+                # Handle duplicate projects by keeping only the most recent one per user/domain
+                try:
+                    cursor.execute("""
+                        DELETE FROM projects 
+                        WHERE project_id NOT IN (
+                            SELECT MAX(project_id) 
+                            FROM projects 
+                            GROUP BY user_id, domain
+                        )
+                    """)
+                    print("Removed duplicate projects, keeping most recent ones")
+                except Exception as e:
+                    print(f"Warning: Could not remove duplicates: {e}")
+            else:
+                print("No existing projects found, skipping domain normalization and duplicate removal")
             
             # Add unique constraint if it doesn't exist
-            cursor.execute("PRAGMA index_list(projects)")
-            indexes = [index[1] for index in cursor.fetchall()]
-            if 'idx_projects_user_domain_unique' not in indexes:
-                cursor.execute("CREATE UNIQUE INDEX idx_projects_user_domain_unique ON projects(user_id, domain)")
-                print("Added unique constraint on user_id and domain")
+            try:
+                cursor.execute("PRAGMA index_list(projects)")
+                indexes = [index[1] for index in cursor.fetchall()]
+                if 'idx_projects_user_domain_unique' not in indexes:
+                    cursor.execute("CREATE UNIQUE INDEX idx_projects_user_domain_unique ON projects(user_id, domain)")
+                    print("Added unique constraint on user_id and domain")
+            except Exception as e:
+                print(f"Warning: Could not add unique constraint: {e}")
                 
         except Exception as e:
             print(f"Migration error: {e}")
@@ -515,6 +536,26 @@ class GambixStrataDatabase:
                 UPDATE projects SET status = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE project_id = ?
             ''', (status, project_id))
+            conn.commit()
+    
+    def update_project_scraped_files(self, project_id: str, scraped_files_path: str):
+        """Update project with scraped files path"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE projects SET scraped_files_path = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE project_id = ?
+            ''', (scraped_files_path, project_id))
+            conn.commit()
+    
+    def update_project_last_crawl(self, project_id: str):
+        """Update project last crawl timestamp"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE projects SET last_crawl = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                WHERE project_id = ?
+            ''', (project_id,))
             conn.commit()
     
     # Site Health Management
@@ -870,49 +911,6 @@ class GambixStrataDatabase:
                 'total_projects': len(projects)
             }
 
-# Legacy compatibility functions
-def add_scraped_site(url: str, scraped_data: Dict[str, Any], saved_directory: str, user_email: Optional[str] = None) -> bool:
-    """Legacy function for backward compatibility"""
-    db = GambixStrataDatabase()
-    
-    # Create user if email provided
-    user_id = None
-    if user_email:
-        user = db.get_user_by_email(user_email)
-        if not user:
-            user_id = db.create_user(user_email, f"User {user_email}", 'user')
-        else:
-            user_id = user['user_id']
-    
-    # Extract domain from URL
-    domain = urlparse(url).netloc
-    
-    # Create project if it doesn't exist
-    projects = db.get_user_projects(user_id) if user_id else []
-    project = next((p for p in projects if p['domain'] == domain), None)
-    
-    if not project and user_id:
-        project_id = db.create_project(user_id, domain, f"{domain} Website")
-    elif project:
-        project_id = project['project_id']
-    else:
-        return False
-    
-    # Add page data
-    page_data = {
-        'page_url': url,
-        'title': scraped_data.get('title', ''),
-        'word_count': scraped_data.get('word_count', 0),
-        'meta_description': scraped_data.get('meta_description', ''),
-        'h1_tags': scraped_data.get('h1_tags', []),
-        'images_count': scraped_data.get('images_count', 0),
-        'links_count': scraped_data.get('links_count', 0),
-        'status': 'healthy'
-    }
-    
-    db.add_page(project_id, page_data)
-    return True
-
     def add_recommendations_from_scrape(self, project_id: str, scraped_data: Dict) -> List[str]:
         """Add recommendations based on scraped data analysis"""
         recommendations = []
@@ -968,6 +966,49 @@ def add_scraped_site(url: str, scraped_data: Dict[str, Any], saved_directory: st
             recommendations.append(rec_id)
         
         return recommendations
+
+# Legacy compatibility functions
+def add_scraped_site(url: str, scraped_data: Dict[str, Any], saved_directory: str, user_email: Optional[str] = None) -> bool:
+    """Legacy function for backward compatibility"""
+    db = GambixStrataDatabase()
+    
+    # Create user if email provided
+    user_id = None
+    if user_email:
+        user = db.get_user_by_email(user_email)
+        if not user:
+            user_id = db.create_user(user_email, f"User {user_email}", 'user')
+        else:
+            user_id = user['user_id']
+    
+    # Extract domain from URL
+    domain = urlparse(url).netloc
+    
+    # Create project if it doesn't exist
+    projects = db.get_user_projects(user_id) if user_id else []
+    project = next((p for p in projects if p['domain'] == domain), None)
+    
+    if not project and user_id:
+        project_id = db.create_project(user_id, domain, f"{domain} Website")
+    elif project:
+        project_id = project['project_id']
+    else:
+        return False
+    
+    # Add page data
+    page_data = {
+        'page_url': url,
+        'title': scraped_data.get('title', ''),
+        'word_count': scraped_data.get('word_count', 0),
+        'meta_description': scraped_data.get('meta_description', ''),
+        'h1_tags': scraped_data.get('h1_tags', []),
+        'images_count': scraped_data.get('images_count', 0),
+        'links_count': scraped_data.get('links_count', 0),
+        'status': 'healthy'
+    }
+    
+    db.add_page(project_id, page_data)
+    return True
 
     def add_recommendation(self, project_id: str, recommendation_data: Dict) -> str:
         """Add a single recommendation"""

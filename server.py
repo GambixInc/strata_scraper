@@ -775,36 +775,29 @@ def create_project():
         
         # Automatically scrape the website after creating the project
         try:
+            # Ensure domain has a protocol
+            if not domain.startswith(('http://', 'https://')):
+                domain_with_protocol = f"https://{domain}"
+            else:
+                domain_with_protocol = domain
+            
             # Call the scraper function
-            scraped_data = simple_web_scraper(domain)
+            scraped_data = simple_web_scraper(domain_with_protocol)
             
             if scraped_data:
                 # Save the scraped content to files
                 saved_dir = save_content_to_files(scraped_data, domain)
                 
-                # Add to site tracker
                 if saved_dir:
-                    add_scraped_site(domain, scraped_data, saved_dir, email)
-                
-                # Create pages in the database
-                db.add_page(project_id, domain, scraped_data)
-                
-                # Create recommendations based on scraped data
-                db.add_recommendations_from_scrape(project_id, scraped_data)
-                
-                # Create site health data
-                health_score = calculate_health_score(scraped_data)
-                db.add_site_health(project_id, {
-                    'overall_score': health_score,
-                    'technical_seo': health_score,
-                    'content_seo': health_score,
-                    'performance': health_score,
-                    'internal_linking': health_score,
-                    'visual_ux': health_score,
-                    'crawl_data': json.dumps(scraped_data)
-                })
-                
-                app.logger.info(f"Successfully scraped and processed {domain} for project {project_id}")
+                    # Store the file path in the database
+                    db.update_project_scraped_files(project_id, saved_dir)
+                    
+                    # Update last_crawl timestamp
+                    db.update_project_last_crawl(project_id)
+                    
+                    app.logger.info(f"Successfully scraped {domain} for project {project_id}, files saved to {saved_dir}")
+                else:
+                    app.logger.warning(f"Failed to save scraped files for {domain}")
             else:
                 app.logger.warning(f"Failed to scrape {domain} for project {project_id}")
                 
@@ -960,6 +953,89 @@ def get_site_health(project_id):
     except Exception as e:
         app.logger.error(f"Error getting site health: {e}")
         return jsonify({'success': False, 'error': 'Failed to get site health data'}), 500
+
+@app.route('/api/gambix/projects/<project_id>/scraped-data', methods=['GET'])
+@require_auth
+def get_project_scraped_data(project_id):
+    """Get scraped data for a specific project from files"""
+    try:
+        db = GambixStrataDatabase()
+        
+        # Get project to verify ownership
+        project = db.get_project(project_id)
+        if not project:
+            return jsonify({'success': False, 'error': 'Project not found'}), 404
+        
+        # Verify project belongs to current user
+        email = request.current_user['email']
+        user_data = db.get_user_by_email(email)
+        if not user_data or project['user_id'] != user_data['user_id']:
+            return jsonify({'success': False, 'error': 'Access denied'}), 403
+        
+        # Check if project has scraped files
+        scraped_files_path = project.get('scraped_files_path')
+        if not scraped_files_path:
+            return jsonify({
+                'success': True,
+                'data': {
+                    'has_scraped_data': False,
+                    'message': 'No scraped data available for this project'
+                }
+            })
+        
+        # Read scraped data from files
+        try:
+            # Read metadata.json
+            metadata_path = os.path.join(scraped_files_path, 'metadata.json')
+            if os.path.exists(metadata_path):
+                with open(metadata_path, 'r') as f:
+                    metadata = json.load(f)
+            else:
+                metadata = {}
+            
+            # Read seo_report.txt
+            seo_report_path = os.path.join(scraped_files_path, 'seo_report.txt')
+            seo_report = ""
+            if os.path.exists(seo_report_path):
+                with open(seo_report_path, 'r') as f:
+                    seo_report = f.read()
+            
+            # Extract key data from metadata
+            seo_data = metadata.get('seo_metadata', {})
+            
+            scraped_data = {
+                'has_scraped_data': True,
+                'title': metadata.get('title', ''),
+                'original_url': metadata.get('original_url', ''),
+                'scraped_at': metadata.get('scraped_at', ''),
+                'seo_report': seo_report,
+                'word_count': seo_data.get('word_count', 0),
+                'meta_description': seo_data.get('meta_description', ''),
+                'images_count': len(seo_data.get('images', [])),
+                'links_count': seo_data.get('links_count', 0),
+                'h1_tags': seo_data.get('headings', {}).get('h1', []),
+                'meta_tags': seo_data.get('meta_tags', {}),
+                'stats': metadata.get('stats', {})
+            }
+            
+            return jsonify({
+                'success': True,
+                'data': scraped_data
+            })
+            
+        except Exception as file_error:
+            app.logger.error(f"Error reading scraped files: {file_error}")
+            return jsonify({
+                'success': True,
+                'data': {
+                    'has_scraped_data': False,
+                    'message': 'Error reading scraped data files'
+                }
+            })
+        
+    except Exception as e:
+        app.logger.error(f"Error getting project scraped data: {e}")
+        return jsonify({'success': False, 'error': 'Failed to get project scraped data'}), 500
 
 @app.route('/api/gambix/projects/<project_id>/pages', methods=['POST'])
 # @limiter.limit("10 per minute")  # Temporarily disabled
