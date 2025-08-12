@@ -1,12 +1,16 @@
 #!/bin/bash
 
-# Strata Scraper - EC2 Docker Deployment Script
+# Strata Scraper API - EC2 Docker Deployment Script
+# This script ONLY deploys the API/backend service, leaving nginx untouched
 # Usage: ./deploy.sh [production|development]
 
 set -e
 
 ENVIRONMENT=${1:-development}
-echo "🚀 Deploying Strata Scraper in $ENVIRONMENT mode..."
+echo "🚀 Deploying Strata Scraper API in $ENVIRONMENT mode..."
+echo "⚠️  This deployment will ONLY affect the API service (strata-scraper)"
+echo "⚠️  Nginx and other services will remain untouched"
+echo ""
 
 # Check if Docker is installed
 if ! command -v docker &> /dev/null; then
@@ -71,17 +75,18 @@ EOF
     echo "⚠️  Please update the .env file with your actual configuration values!"
 fi
 
-# Stop existing containers
-echo "🛑 Stopping existing containers..."
-docker-compose down --remove-orphans
+# Stop only the strata-scraper service
+echo "🛑 Stopping strata-scraper service..."
+docker-compose stop strata-scraper || true
+docker-compose rm -f strata-scraper || true
 
-# Build and start containers
+# Build and start only the strata-scraper service
 if [ "$ENVIRONMENT" = "production" ]; then
-    echo "🏭 Starting production stack..."
-    docker-compose --profile production up -d --build
+    echo "🏭 Starting strata-scraper in production mode..."
+    docker-compose up -d --build strata-scraper
 else
-    echo "🔧 Starting development stack..."
-    docker-compose up -d --build
+    echo "🔧 Starting strata-scraper in development mode..."
+    docker-compose up -d --build strata-scraper
 fi
 
 # Wait for containers to be ready
@@ -90,21 +95,24 @@ sleep 10
 
 # Check health
 echo "🏥 Checking application health..."
-if curl -f http://localhost:80/api/health > /dev/null 2>&1; then
-    echo "✅ Application is healthy!"
+if curl -f http://localhost:8080/api/health > /dev/null 2>&1; then
+    echo "✅ Strata Scraper API is healthy!"
 else
-    echo "❌ Application health check failed. Check logs with: docker-compose logs"
+    echo "❌ Strata Scraper API health check failed. Check logs with: docker-compose logs strata-scraper"
     exit 1
 fi
 
 # Show status
-echo "📊 Container status:"
-docker-compose ps
+echo "📊 Strata Scraper service status:"
+docker-compose ps strata-scraper
 
 echo "📋 Useful commands:"
-echo "  View logs: docker-compose logs -f"
-echo "  Restart: docker-compose restart"
-echo "  Stop: docker-compose down"
-echo "  Update: git pull && docker-compose up -d --build"
+echo "  View logs: docker-compose logs -f strata-scraper"
+echo "  Restart: docker-compose restart strata-scraper"
+echo "  Stop: docker-compose stop strata-scraper"
+echo "  Update: git pull && ./deploy.sh production"
 
-echo "🎉 Deployment complete! Your application is running on http://localhost:8080"
+echo "🎉 Strata Scraper API deployment complete!"
+echo "🌐 API is running on http://localhost:8080"
+echo "🔍 Health check: http://localhost:8080/api/health"
+echo "⚠️  Note: This deployment only affects the API service. Nginx configuration remains unchanged."
