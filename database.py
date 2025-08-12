@@ -113,6 +113,7 @@ class GambixStrataDatabase:
                     guidelines TEXT, -- JSON array
                     status TEXT CHECK(status IN ('pending', 'accepted', 'dismissed')) DEFAULT 'pending',
                     priority TEXT CHECK(priority IN ('low', 'medium', 'high', 'critical')) DEFAULT 'medium',
+                    impact_score INTEGER DEFAULT 50,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (project_id) REFERENCES projects(project_id)
@@ -151,6 +152,9 @@ class GambixStrataDatabase:
             
             # Create indexes for better performance
             self._create_indexes(cursor)
+            
+            # Add missing columns to existing tables
+            self._migrate_schema(cursor)
             
             conn.commit()
     
@@ -194,6 +198,18 @@ class GambixStrataDatabase:
         
         for index_sql in indexes:
             cursor.execute(index_sql)
+    
+    def _migrate_schema(self, cursor):
+        """Migrate existing database schema to add missing columns"""
+        try:
+            # Add impact_score column to recommendations table if it doesn't exist
+            cursor.execute("PRAGMA table_info(recommendations)")
+            columns = [column[1] for column in cursor.fetchall()]
+            if 'impact_score' not in columns:
+                cursor.execute("ALTER TABLE recommendations ADD COLUMN impact_score INTEGER DEFAULT 50")
+                print("Added impact_score column to recommendations table")
+        except Exception as e:
+            print(f"Migration error: {e}")
     
     def _generate_id(self) -> str:
         """Generate a UUID for primary keys"""
@@ -357,6 +373,37 @@ class GambixStrataDatabase:
                 project_data['settings'] = self._deserialize_json(project_data['settings'])
                 return project_data
         return None
+    
+    def delete_project(self, project_id: str) -> bool:
+        """Delete a project and all its associated data"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Delete associated data first (due to foreign key constraints)
+                # Delete site health data
+                cursor.execute('DELETE FROM site_health WHERE project_id = ?', (project_id,))
+                
+                # Delete pages
+                cursor.execute('DELETE FROM pages WHERE project_id = ?', (project_id,))
+                
+                # Delete recommendations
+                cursor.execute('DELETE FROM recommendations WHERE project_id = ?', (project_id,))
+                
+                # Delete optimizations
+                cursor.execute('DELETE FROM optimizations WHERE project_id = ?', (project_id,))
+                
+                # Note: alerts table uses user_id, not project_id, so we don't delete alerts
+                # They are user-specific, not project-specific
+                
+                # Finally delete the project
+                cursor.execute('DELETE FROM projects WHERE project_id = ?', (project_id,))
+                
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"Error deleting project {project_id}: {e}")
+            return False
     
     def update_project_status(self, project_id: str, status: str):
         """Update project status"""
@@ -763,6 +810,84 @@ def add_scraped_site(url: str, scraped_data: Dict[str, Any], saved_directory: st
     
     db.add_page(project_id, page_data)
     return True
+
+    def add_recommendations_from_scrape(self, project_id: str, scraped_data: Dict) -> List[str]:
+        """Add recommendations based on scraped data analysis"""
+        recommendations = []
+        
+        # Analyze scraped data and create recommendations
+        seo_data = scraped_data.get('seo_metadata', {})
+        
+        # Check for missing meta description
+        if not seo_data.get('meta_description'):
+            rec_id = self.add_recommendation(project_id, {
+                'category': 'SEO',
+                'issue': 'Missing Meta Description',
+                'recommendation': 'Add a meta description to improve search engine visibility',
+                'priority': 'high',
+                'impact_score': 85
+            })
+            recommendations.append(rec_id)
+        
+        # Check for missing title
+        if not scraped_data.get('title'):
+            rec_id = self.add_recommendation(project_id, {
+                'category': 'SEO',
+                'issue': 'Missing Page Title',
+                'recommendation': 'Add a descriptive page title for better SEO',
+                'priority': 'high',
+                'impact_score': 90
+            })
+            recommendations.append(rec_id)
+        
+        # Check for images without alt text
+        images = seo_data.get('images', [])
+        images_without_alt = sum(1 for img in images if not img.get('alt'))
+        if images_without_alt > 0:
+            rec_id = self.add_recommendation(project_id, {
+                'category': 'Accessibility',
+                'issue': f'{images_without_alt} Images Missing Alt Text',
+                'recommendation': 'Add alt text to all images for better accessibility and SEO',
+                'priority': 'medium',
+                'impact_score': 70
+            })
+            recommendations.append(rec_id)
+        
+        # Check for low word count
+        word_count = seo_data.get('word_count', 0)
+        if word_count < 300:
+            rec_id = self.add_recommendation(project_id, {
+                'category': 'Content',
+                'issue': 'Low Word Count',
+                'recommendation': f'Increase content length. Current: {word_count} words. Aim for 300+ words.',
+                'priority': 'medium',
+                'impact_score': 75
+            })
+            recommendations.append(rec_id)
+        
+        return recommendations
+
+    def add_recommendation(self, project_id: str, recommendation_data: Dict) -> str:
+        """Add a single recommendation"""
+        recommendation_id = self._generate_id()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO recommendations (
+                    recommendation_id, project_id, category, issue, recommendation,
+                    priority, impact_score, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                recommendation_id, project_id,
+                recommendation_data.get('category'),
+                recommendation_data.get('issue'),
+                recommendation_data.get('recommendation'),
+                recommendation_data.get('priority', 'medium'),
+                recommendation_data.get('impact_score', 50),
+                'pending'
+            ))
+            conn.commit()
+        return recommendation_id
 
 def add_optimized_site(url: str, user_profile: str, optimized_directory: str) -> bool:
     """Legacy function for backward compatibility"""

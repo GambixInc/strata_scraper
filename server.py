@@ -12,8 +12,43 @@ from flask_talisman import Talisman
 import logging
 from logging.handlers import RotatingFileHandler
 from auth import require_auth, require_role
+from typing import Dict
 
 import sentry_sdk
+
+def calculate_health_score(scraped_data: Dict) -> int:
+    """Calculate a health score based on scraped data"""
+    score = 100
+    seo_data = scraped_data.get('seo_metadata', {})
+    
+    # Deduct points for missing elements
+    if not scraped_data.get('title'):
+        score -= 15
+    if not seo_data.get('meta_description'):
+        score -= 10
+    if not seo_data.get('canonical_url'):
+        score -= 5
+    
+    # Check images without alt text
+    images = seo_data.get('images', [])
+    images_without_alt = sum(1 for img in images if not img.get('alt'))
+    if images_without_alt > 0:
+        score -= min(10, images_without_alt * 2)
+    
+    # Check word count
+    word_count = seo_data.get('word_count', 0)
+    if word_count < 300:
+        score -= 10
+    elif word_count < 500:
+        score -= 5
+    
+    # Check for tracking tools (too many can be bad)
+    analytics = seo_data.get('analytics', [])
+    if len(analytics) > 5:
+        score -= 5
+    
+    # Ensure score is between 0 and 100
+    return max(0, min(100, score))
 
 sentry_sdk.init(
     dsn="https://ffde2275aa6db7e04c3e35413b820421@o4509488900276224.ingest.us.sentry.io/4509610363191296",
@@ -728,11 +763,50 @@ def create_project():
         
         project_id = db.create_project(user_id, domain, name, settings)
         
+        # Automatically scrape the website after creating the project
+        try:
+            # Call the scraper function
+            scraped_data = simple_web_scraper(domain)
+            
+            if scraped_data:
+                # Save the scraped content to files
+                saved_dir = save_content_to_files(scraped_data, domain)
+                
+                # Add to site tracker
+                if saved_dir:
+                    add_scraped_site(domain, scraped_data, saved_dir, email)
+                
+                # Create pages in the database
+                db.add_page(project_id, domain, scraped_data)
+                
+                # Create recommendations based on scraped data
+                db.add_recommendations_from_scrape(project_id, scraped_data)
+                
+                # Create site health data
+                health_score = calculate_health_score(scraped_data)
+                db.add_site_health(project_id, {
+                    'overall_score': health_score,
+                    'technical_seo': health_score,
+                    'content_seo': health_score,
+                    'performance': health_score,
+                    'internal_linking': health_score,
+                    'visual_ux': health_score,
+                    'crawl_data': json.dumps(scraped_data)
+                })
+                
+                app.logger.info(f"Successfully scraped and processed {domain} for project {project_id}")
+            else:
+                app.logger.warning(f"Failed to scrape {domain} for project {project_id}")
+                
+        except Exception as scrape_error:
+            app.logger.error(f"Error during automatic scraping for project {project_id}: {scrape_error}")
+            # Don't fail the project creation if scraping fails
+        
         return jsonify({
             'success': True,
             'data': {
                 'project_id': project_id,
-                'message': 'Project created successfully'
+                'message': 'Project created successfully and website scraped'
             }
         })
     except Exception as e:
@@ -780,6 +854,62 @@ def get_user_projects():
     except Exception as e:
         app.logger.error(f"Error getting user projects: {e}")
         return jsonify({'success': False, 'error': 'Failed to get user projects'}), 500
+
+@app.route('/api/gambix/projects/<project_id>', methods=['GET'])
+@require_auth
+def get_project(project_id):
+    """Get a single project by ID"""
+    try:
+        db = GambixStrataDatabase()
+        project = db.get_project(project_id)
+        
+        if not project:
+            return jsonify({'success': False, 'error': 'Project not found'}), 404
+        
+        return jsonify({
+            'success': True,
+            'data': project
+        })
+    except Exception as e:
+        app.logger.error(f"Error getting project: {e}")
+        return jsonify({'success': False, 'error': 'Failed to get project'}), 500
+
+@app.route('/api/gambix/projects/<project_id>', methods=['DELETE'])
+@require_auth
+def delete_project(project_id):
+    """Delete a project by ID"""
+    try:
+        email = request.current_user['email']
+        db = GambixStrataDatabase()
+        
+        # Get user from database
+        user_data = db.get_user_by_email(email)
+        if not user_data:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        
+        # Get the project to verify ownership
+        project = db.get_project(project_id)
+        if not project:
+            return jsonify({'success': False, 'error': 'Project not found'}), 404
+        
+        # Verify the project belongs to the current user
+        if project['user_id'] != user_data['user_id']:
+            return jsonify({'success': False, 'error': 'Unauthorized to delete this project'}), 403
+        
+        # Delete the project
+        success = db.delete_project(project_id)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Project deleted successfully'
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Failed to delete project'}), 500
+            
+    except Exception as e:
+        app.logger.error(f"Error deleting project: {e}")
+        return jsonify({'success': False, 'error': 'Failed to delete project'}), 500
 
 @app.route('/api/gambix/projects/<project_id>/health', methods=['POST'])
 # @limiter.limit("10 per minute")  # Temporarily disabled
@@ -1052,8 +1182,11 @@ def get_dashboard_data_legacy(user_id):
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve_react_app(path):
-    if path.startswith('api/') or path.startswith('strata_design/') or path.startswith('static/'):
-        # Let other routes handle API and static asset requests
+    if path.startswith('api/'):
+        # Let Flask routes handle API requests - return 404 if not handled
+        return jsonify({'error': 'API endpoint not found'}), 404
+    elif path.startswith('strata_design/') or path.startswith('static/'):
+        # Let other routes handle static asset requests
         return app.send_static_file(path)
     return send_from_directory('strata_design', 'index.html')
 

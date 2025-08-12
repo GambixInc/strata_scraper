@@ -6,6 +6,7 @@ import os
 from urllib.parse import urlparse, urljoin
 import json
 from datetime import datetime
+import uuid
 
 # Suppress the InsecureRequestWarning when using verify=False (not recommended for production)
 requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
@@ -380,10 +381,11 @@ def get_safe_filename(url):
     else:
         path = path.lstrip('_')
     
-    # Add timestamp to avoid conflicts
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Add timestamp with milliseconds and a unique ID to avoid conflicts
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]  # Include milliseconds
+    unique_id = str(uuid.uuid4())[:8]  # First 8 characters of UUID
     
-    return f"{domain}_{path}_{timestamp}"
+    return f"{domain}_{path}_{timestamp}_{unique_id}"
 
 def save_content_to_files(scraped_data, url, base_filename=None):
     """
