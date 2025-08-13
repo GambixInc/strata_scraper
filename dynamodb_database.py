@@ -24,8 +24,10 @@ class DynamoDBDatabase:
             self.dynamodb = boto3.resource('dynamodb', endpoint_url=endpoint_url)
             self.client = boto3.client('dynamodb', endpoint_url=endpoint_url)
         else:
-            self.dynamodb = boto3.resource('dynamodb')
-            self.client = boto3.client('dynamodb')
+            # Get region from environment or use default
+            region = os.getenv('AWS_REGION', 'us-east-1')
+            self.dynamodb = boto3.resource('dynamodb', region_name=region)
+            self.client = boto3.client('dynamodb', region_name=region)
         
         # Table names
         self.users_table_name = f"{table_prefix}_users"

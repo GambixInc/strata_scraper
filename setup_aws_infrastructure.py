@@ -273,8 +273,8 @@ def setup_dynamodb_tables(table_prefix, region, dry_run=False, force=False):
             dynamodb = boto3.resource('dynamodb', endpoint_url=endpoint_url)
             client = boto3.client('dynamodb', endpoint_url=endpoint_url)
         else:
-            dynamodb = boto3.resource('dynamodb')
-            client = boto3.client('dynamodb')
+            dynamodb = boto3.resource('dynamodb', region_name=region)
+            client = boto3.client('dynamodb', region_name=region)
         
         # Define table schemas
         tables = {
@@ -513,7 +513,7 @@ def setup_dynamodb_tables(table_prefix, region, dry_run=False, force=False):
         logger.error(f"❌ Unexpected error setting up DynamoDB tables: {e}")
         return False
 
-def verify_infrastructure(bucket_name, table_prefix):
+def verify_infrastructure(bucket_name, table_prefix, region):
     """Verify that all infrastructure is properly set up"""
     logger.info("🔍 Verifying infrastructure setup...")
     
@@ -536,7 +536,7 @@ def verify_infrastructure(bucket_name, table_prefix):
         if endpoint_url:
             client = boto3.client('dynamodb', endpoint_url=endpoint_url)
         else:
-            client = boto3.client('dynamodb')
+            client = boto3.client('dynamodb', region_name=region)
         table_names = [
             f"{table_prefix}_users",
             f"{table_prefix}_projects", 
@@ -621,7 +621,7 @@ def main():
     
     # Verify setup (only if not dry run)
     if not args.dry_run and success:
-        if not verify_infrastructure(bucket_name, args.table_prefix):
+        if not verify_infrastructure(bucket_name, args.table_prefix, region):
             success = False
     
     logger.info("\n" + "=" * 60)
