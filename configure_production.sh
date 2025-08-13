@@ -1,9 +1,9 @@
 #!/bin/bash
-# Production Deployment Script for EC2 with IAM Role
+# Configure Production Environment (EC2 with existing infrastructure)
 
 set -e  # Exit on any error
 
-echo "🚀 Deploying Strata Scraper to Production (EC2 with IAM Role)"
+echo "🔧 Configuring Strata Scraper for Production (EC2)"
 
 # Load environment variables from .env.production if it exists
 if [ -f ".env.production" ]; then
@@ -24,18 +24,30 @@ echo "   DynamoDB Prefix: $TABLE_PREFIX"
 echo "   AWS Region: $REGION"
 echo ""
 
-# Step 1: Check if infrastructure exists (optional)
-echo "🔍 Checking AWS infrastructure..."
-if python3 setup_aws_infrastructure.py --table-prefix "$TABLE_PREFIX" --dry-run; then
-    echo "✅ AWS infrastructure is accessible"
+# Step 1: Test AWS connectivity
+echo "🔍 Testing AWS connectivity..."
+if python3 -c "
+import boto3
+import os
+try:
+    s3 = boto3.client('s3')
+    s3.head_bucket(Bucket='$BUCKET_NAME')
+    print('✅ S3 bucket accessible')
+    
+    dynamodb = boto3.resource('dynamodb')
+    tables = list(dynamodb.tables.all())
+    print(f'✅ DynamoDB accessible ({len(tables)} tables found)')
+except Exception as e:
+    print(f'❌ AWS connectivity failed: {e}')
+    exit(1)
+"; then
+    echo "✅ AWS connectivity test passed"
 else
-    echo "⚠️  AWS infrastructure check failed. Please ensure:"
+    echo "❌ AWS connectivity test failed"
+    echo "💡 Please ensure:"
     echo "   - IAM role has proper permissions"
     echo "   - S3 bucket exists: $BUCKET_NAME"
     echo "   - DynamoDB tables exist with prefix: $TABLE_PREFIX"
-    echo ""
-    echo "💡 To create infrastructure (if needed):"
-    echo "   python3 setup_aws_infrastructure.py --table-prefix $TABLE_PREFIX"
     exit 1
 fi
 
@@ -52,7 +64,7 @@ else
     echo "ℹ️ No SQLite database found, skipping migration"
 fi
 
-# Step 3: Update .env.production with current settings
+# Step 3: Update .env.production
 echo "📝 Updating .env.production..."
 cat > .env.production << EOF
 # Application Settings
@@ -73,7 +85,7 @@ AWS_REGION=$REGION
 USE_DYNAMODB=true
 EOF
 
-echo "✅ Production deployment completed!"
+echo "✅ Production configuration completed!"
 echo ""
 echo "📋 Next Steps:"
 echo "1. Restart your application to use DynamoDB"
@@ -84,3 +96,5 @@ echo "🔧 To restart your application:"
 echo "   sudo systemctl restart your-app-service"
 echo "   # or if using Docker:"
 echo "   docker compose -f docker-compose.prod.yml --profile production up -d"
+echo "   # or if running directly:"
+echo "   pkill -f 'python.*server.py' && python3 server.py &"
