@@ -5,6 +5,14 @@ set -e  # Exit on any error
 
 echo "🚀 Deploying Strata Scraper to Production (EC2 with IAM Role)"
 
+# Load environment variables from .env.production if it exists
+if [ -f ".env.production" ]; then
+    echo "📋 Loading environment from .env.production"
+    export $(cat .env.production | grep -v '^#' | xargs)
+else
+    echo "⚠️  .env.production not found, using defaults"
+fi
+
 # Configuration
 BUCKET_NAME="${S3_BUCKET_NAME:-gambix-strata-production}"
 TABLE_PREFIX="${DYNAMODB_TABLE_PREFIX:-gambix_strata_prod}"
