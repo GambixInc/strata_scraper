@@ -32,7 +32,7 @@ mkdir -p logs data scraped_data optimized_sites config backups
 # Create .env file if it doesn't exist
 if [ ! -f .env ]; then
     echo "📝 Creating .env file..."
-    echo "💡 Tip: For S3 storage, update AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and S3_BUCKET_NAME"
+    echo "💡 Tip: For S3 storage, ensure AWS CLI is configured and set S3_BUCKET_NAME"
     cat > .env << EOF
 # Application Configuration
 PORT=8080
@@ -57,10 +57,9 @@ LOG_FILE=/app/logs/web_scraper.log
 
 # AWS S3 Configuration
 AWS_REGION=us-east-1
-AWS_ACCESS_KEY_ID=your-aws-access-key-id
-AWS_SECRET_ACCESS_KEY=your-aws-secret-access-key
 S3_BUCKET_NAME=your-s3-bucket-name
 S3_ENDPOINT_URL=https://s3.amazonaws.com
+# Note: AWS credentials are handled by AWS CLI or IAM roles
 
 # Application Settings
 MAX_CONTENT_LENGTH=16777216
@@ -109,9 +108,9 @@ fi
 # Check AWS infrastructure
 echo "☁️ Checking AWS infrastructure..."
 if [ -f .env ]; then
-    if grep -q "your-aws-access-key-id" .env || grep -q "your-s3-bucket-name" .env; then
+    if grep -q "your-s3-bucket-name" .env; then
         echo "⚠️  AWS configuration appears to be using default values"
-        echo "💡 To enable AWS services, update your .env file with actual AWS credentials"
+        echo "💡 To enable AWS services, ensure AWS CLI is configured and update S3_BUCKET_NAME"
         echo "💡 Or run: python setup_aws_infrastructure.py --dry-run"
     else
         echo "✅ AWS configuration appears to be set up"
