@@ -61,11 +61,26 @@ class DynamoDBDatabase:
             self._create_optimizations_table
         ]
         
+        created_tables = []
         for create_table_func in tables_to_create:
             try:
-                create_table_func()
+                table_name = create_table_func()
+                if table_name:
+                    created_tables.append(table_name)
             except Exception as e:
                 logger.warning(f"Table creation failed: {e}")
+        
+        # Wait for all created tables to be active
+        if created_tables:
+            logger.info("⏳ Waiting for tables to become active...")
+            for table_name in created_tables:
+                try:
+                    table = self.dynamodb.Table(table_name)
+                    table.meta.client.get_waiter('table_exists').wait(TableName=table_name)
+                    logger.info(f"✅ Table {table_name} is now active")
+                except Exception as e:
+                    logger.warning(f"Failed to wait for table {table_name}: {e}")
+            logger.info("✅ All tables are ready for use")
     
     def _create_users_table(self):
         """Create users table"""
@@ -98,9 +113,11 @@ class DynamoDBDatabase:
                 }
             )
             logger.info(f"Created table: {self.users_table_name}")
+            return self.users_table_name
         except ClientError as e:
             if e.response['Error']['Code'] != 'ResourceInUseException':
                 raise
+            return None
     
     def _create_projects_table(self):
         """Create projects table"""
@@ -146,9 +163,11 @@ class DynamoDBDatabase:
                 }
             )
             logger.info(f"Created table: {self.projects_table_name}")
+            return self.projects_table_name
         except ClientError as e:
             if e.response['Error']['Code'] != 'ResourceInUseException':
                 raise
+            return None
     
     def _create_site_health_table(self):
         """Create site health table"""
@@ -183,9 +202,11 @@ class DynamoDBDatabase:
                 }
             )
             logger.info(f"Created table: {self.site_health_table_name}")
+            return self.site_health_table_name
         except ClientError as e:
             if e.response['Error']['Code'] != 'ResourceInUseException':
                 raise
+            return None
     
     def _create_pages_table(self):
         """Create pages table"""
@@ -218,9 +239,11 @@ class DynamoDBDatabase:
                 }
             )
             logger.info(f"Created table: {self.pages_table_name}")
+            return self.pages_table_name
         except ClientError as e:
             if e.response['Error']['Code'] != 'ResourceInUseException':
                 raise
+            return None
     
     def _create_recommendations_table(self):
         """Create recommendations table"""
@@ -255,9 +278,11 @@ class DynamoDBDatabase:
                 }
             )
             logger.info(f"Created table: {self.recommendations_table_name}")
+            return self.recommendations_table_name
         except ClientError as e:
             if e.response['Error']['Code'] != 'ResourceInUseException':
                 raise
+            return None
     
     def _create_alerts_table(self):
         """Create alerts table"""
@@ -292,9 +317,11 @@ class DynamoDBDatabase:
                 }
             )
             logger.info(f"Created table: {self.alerts_table_name}")
+            return self.alerts_table_name
         except ClientError as e:
             if e.response['Error']['Code'] != 'ResourceInUseException':
                 raise
+            return None
     
     def _create_optimizations_table(self):
         """Create optimizations table"""
@@ -327,9 +354,11 @@ class DynamoDBDatabase:
                 }
             )
             logger.info(f"Created table: {self.optimizations_table_name}")
+            return self.optimizations_table_name
         except ClientError as e:
             if e.response['Error']['Code'] != 'ResourceInUseException':
                 raise
+            return None
     
     def _generate_id(self) -> str:
         """Generate a unique ID"""
