@@ -51,7 +51,8 @@ function Backup-Logs {
     if (Test-Path $LogFile) {
         $LineCount = (Get-Content $LogFile | Measure-Object -Line).Lines
         Write-Host "   ✅ $Filename ($LineCount lines)" -ForegroundColor Green
-    } else {
+    }
+    else {
         Write-Host "   ❌ Failed to backup $Filename" -ForegroundColor Red
     }
 }
@@ -69,7 +70,8 @@ $Result = docker logs $ContainerName 2>&1 | Out-File -FilePath $AllLogsFile -Enc
 if (Test-Path $AllLogsFile) {
     $LineCount = (Get-Content $AllLogsFile | Measure-Object -Line).Lines
     Write-Host "   ✅ logs_all_$Timestamp.txt ($LineCount lines)" -ForegroundColor Green
-} else {
+}
+else {
     Write-Host "   ❌ Failed to backup all logs" -ForegroundColor Red
 }
 
