@@ -5,16 +5,6 @@ set -e  # Exit on any error
 
 echo "🚀 Deploying Strata Scraper to Production (EC2 with IAM Role)"
 
-# Step 0: Install Python dependencies
-echo "📦 Installing Python dependencies..."
-if pip3 install -r requirements.txt; then
-    echo "✅ Dependencies installed successfully"
-else
-    echo "❌ Failed to install dependencies"
-    echo "💡 Try installing manually: pip3 install -r requirements.txt"
-    exit 1
-fi
-
 # Load environment variables from .env.production if it exists
 if [ -f ".env.production" ]; then
     echo "📋 Loading environment from .env.production"
@@ -83,14 +73,23 @@ AWS_REGION=$REGION
 USE_DYNAMODB=true
 EOF
 
+# Step 4: Deploy with Docker
+echo "🐳 Deploying with Docker..."
+if docker-compose --profile production up -d --build; then
+    echo "✅ Docker deployment completed successfully"
+else
+    echo "❌ Docker deployment failed"
+    exit 1
+fi
+
 echo "✅ Production deployment completed!"
 echo ""
 echo "📋 Next Steps:"
-echo "1. Restart your application to use DynamoDB"
-echo "2. Test the application: curl http://localhost:8080/api/health"
-echo "3. Monitor logs for any issues"
+echo "1. Test the application: curl http://localhost:8080/api/health"
+echo "2. Test HTTPS: curl https://api.strata.cx/api/health"
+echo "3. Monitor logs: docker-compose logs -f"
 echo ""
-echo "🔧 To restart your application:"
-echo "   sudo systemctl restart your-app-service"
-echo "   # or if using Docker:"
-echo "   docker compose -f docker-compose.prod.yml --profile production up -d"
+echo "🔧 Useful commands:"
+echo "   View logs: docker-compose logs -f"
+echo "   Restart: docker-compose restart"
+echo "   Stop: docker-compose down"
