@@ -50,8 +50,9 @@ def test_aws_connectivity():
         identity = sts.get_caller_identity()
         logger.info(f"✅ AWS connectivity successful - Account: {identity['Account']}")
         
-        # Test DynamoDB connectivity
-        dynamodb = boto3.client('dynamodb')
+        # Test DynamoDB connectivity with region
+        region = os.getenv('AWS_REGION', 'us-east-1')
+        dynamodb = boto3.client('dynamodb', region_name=region)
         dynamodb.list_tables()
         logger.info("✅ DynamoDB connectivity successful")
         
@@ -78,7 +79,8 @@ def test_dynamodb_permissions(table_prefix):
     logger.info("🔍 Testing DynamoDB Permissions...")
     
     try:
-        dynamodb = boto3.resource('dynamodb')
+        region = os.getenv('AWS_REGION', 'us-east-1')
+        dynamodb = boto3.resource('dynamodb', region_name=region)
         test_table_name = f"{table_prefix}_test_permissions"
         
         # Try to create a test table
@@ -156,10 +158,8 @@ def check_environment_configuration():
     """Check environment configuration"""
     logger.info("🔍 Checking Environment Configuration...")
     
-    # Check required environment variables
+    # Check required environment variables (AWS credentials handled by CLI)
     required_vars = {
-        'AWS_ACCESS_KEY_ID': 'AWS Access Key ID',
-        'AWS_SECRET_ACCESS_KEY': 'AWS Secret Access Key',
         'AWS_REGION': 'AWS Region',
         'DYNAMODB_TABLE_PREFIX': 'DynamoDB Table Prefix'
     }
@@ -177,6 +177,7 @@ def check_environment_configuration():
         return False
     
     logger.info("✅ Environment configuration is complete")
+    logger.info("ℹ️  AWS credentials are handled by AWS CLI credential chain")
     return True
 
 def check_docker_configuration():
