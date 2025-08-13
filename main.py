@@ -1406,7 +1406,7 @@ if __name__ == "__main__":
         if saved_location:
             # Save to database
             try:
-                from database import add_scraped_site
+                from database_config import add_scraped_site
                 if add_scraped_site(target_url, scraped_data, saved_location):
                     print("✅ Data saved to SQLite database")
                 else:

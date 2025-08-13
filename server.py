@@ -3,7 +3,7 @@ from flask_cors import CORS
 import os
 import sqlite3
 from main import simple_web_scraper, save_content_to_files, save_content_to_s3, get_safe_filename
-from database import GambixStrataDatabase, add_scraped_site, add_optimized_site, get_site_stats, export_summary, get_sites_by_user_email, get_all_sites
+from database_config import GambixStrataDatabase, add_scraped_site, add_optimized_site, get_site_stats, export_summary, get_sites_by_user_email, get_all_sites, USE_DYNAMODB
 import json
 from datetime import datetime
 from flask_limiter import Limiter
