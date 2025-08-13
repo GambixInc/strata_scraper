@@ -36,30 +36,29 @@ def check_aws_credentials():
     """Check if AWS credentials are properly configured"""
     logger.info("🔍 Checking AWS Credentials...")
     
-    required_vars = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']
-    missing_vars = []
-    
     # Check if we're using LocalStack
     endpoint_url = os.getenv('DYNAMODB_ENDPOINT_URL') or os.getenv('S3_ENDPOINT_URL')
     is_localstack = endpoint_url and 'localhost' in endpoint_url
     
-    for var in required_vars:
-        value = os.getenv(var)
-        if not value or not value.strip():
-            missing_vars.append(var)
-        elif not is_localstack and ('your-' in value or 'placeholder' in value or 'test' in value.lower()):
-            logger.error(f"❌ {var} appears to be a placeholder or test value")
-            return False
-    
-    if missing_vars:
-        logger.error(f"❌ Missing required AWS environment variables: {', '.join(missing_vars)}")
-        return False
-    
     if is_localstack:
         logger.info("✅ AWS credentials configured for LocalStack testing")
-    else:
-        logger.info("✅ AWS credentials are configured")
-    return True
+        return True
+    
+    # For production, rely on AWS CLI's automatic credential detection
+    # This includes IAM roles, AWS CLI profiles, and environment variables
+    try:
+        import boto3
+        sts = boto3.client('sts')
+        identity = sts.get_caller_identity()
+        logger.info(f"✅ AWS credentials detected - Account: {identity['Account']}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ AWS credentials not found or invalid: {e}")
+        logger.info("💡 Make sure you have:")
+        logger.info("   1. IAM role attached to EC2 instance, OR")
+        logger.info("   2. AWS CLI configured (aws configure), OR")
+        logger.info("   3. AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables")
+        return False
 
 def validate_bucket_name(bucket_name):
     """Validate S3 bucket name for production use"""
