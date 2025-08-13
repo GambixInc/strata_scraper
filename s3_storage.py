@@ -14,21 +14,18 @@ class S3Storage:
     """
     
     def __init__(self):
-        self.aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
-        self.aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
         self.aws_region = os.getenv('AWS_REGION', 'us-east-1')
         self.bucket_name = os.getenv('S3_BUCKET_NAME')
         self.endpoint_url = os.getenv('S3_ENDPOINT_URL', 'https://s3.amazonaws.com')
         
         # Validate required environment variables
-        if not all([self.aws_access_key_id, self.aws_secret_access_key, self.bucket_name]):
-            raise ValueError("Missing required S3 environment variables: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, S3_BUCKET_NAME")
+        if not self.bucket_name:
+            raise ValueError("Missing required S3 environment variable: S3_BUCKET_NAME")
         
-        # Initialize S3 client
+        # Initialize S3 client using AWS CLI credential chain
+        # This will automatically use IAM roles, AWS CLI credentials, or environment variables
         self.s3_client = boto3.client(
             's3',
-            aws_access_key_id=self.aws_access_key_id,
-            aws_secret_access_key=self.aws_secret_access_key,
             region_name=self.aws_region,
             endpoint_url=self.endpoint_url
         )

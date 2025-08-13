@@ -40,22 +40,35 @@ if python3 -c "
 import boto3
 import os
 try:
+    # Test AWS credentials using STS
+    sts = boto3.client('sts')
+    identity = sts.get_caller_identity()
+    print(f'✅ AWS credentials verified - Account: {identity[\"Account\"]}, User: {identity[\"Arn\"]}')
+    
+    # Test S3 access
     s3 = boto3.client('s3')
     s3.head_bucket(Bucket='$BUCKET_NAME')
     print('✅ S3 bucket accessible')
     
+    # Test DynamoDB access
     dynamodb = boto3.resource('dynamodb')
     tables = list(dynamodb.tables.all())
     print(f'✅ DynamoDB accessible ({len(tables)} tables found)')
 except Exception as e:
     print(f'❌ AWS connectivity failed: {e}')
+    print('💡 Please ensure:')
+    print('   - AWS CLI is configured (aws configure)')
+    print('   - IAM role has proper permissions (if using EC2)')
+    print('   - S3 bucket exists: $BUCKET_NAME')
+    print('   - DynamoDB tables exist with prefix: $TABLE_PREFIX')
     exit(1)
 "; then
     echo "✅ AWS connectivity test passed"
 else
     echo "❌ AWS connectivity test failed"
     echo "💡 Please ensure:"
-    echo "   - IAM role has proper permissions"
+    echo "   - AWS CLI is configured: aws configure"
+    echo "   - IAM role has proper permissions (if using EC2)"
     echo "   - S3 bucket exists: $BUCKET_NAME"
     echo "   - DynamoDB tables exist with prefix: $TABLE_PREFIX"
     exit 1
@@ -93,6 +106,9 @@ AWS_REGION=$REGION
 
 # Database Switch
 USE_DYNAMODB=true
+
+# Note: AWS credentials are handled by AWS CLI or IAM roles
+# No need to set AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY
 EOF
 
 echo "✅ Production configuration completed!"

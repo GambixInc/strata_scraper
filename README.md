@@ -37,10 +37,12 @@ python migrate_to_gambix_strata.py --sample
 ## 📋 Prerequisites
 
 ### For Docker Deployment (Recommended)
+
 - Docker Desktop installed and running
 - Git (for cloning the repository)
 
 ### For Local Development
+
 - Python 3.8+
 - pip (Python package manager)
 - Git (for cloning the repository)
@@ -52,22 +54,26 @@ python migrate_to_gambix_strata.py --sample
 This is the easiest and most reliable way to run the project:
 
 1. **Clone the repository:**
+
    ```bash
    git clone <repository-url>
    cd strata_scraper
    ```
 
 2. **Start the application:**
+
    ```bash
    docker compose up --build
    ```
 
 3. **Access the application:**
+
    - **Frontend**: http://localhost:8080
    - **API Documentation**: http://localhost:8080/api
    - **Health Check**: http://localhost:8080/api/health
 
 4. **Stop the application:**
+
    ```bash
    docker compose down
    ```
@@ -80,17 +86,20 @@ This is the easiest and most reliable way to run the project:
 ### Option 2: Local Development
 
 1. **Clone the repository:**
+
    ```bash
    git clone <repository-url>
    cd strata_scraper
    ```
 
 2. **Install dependencies:**
+
    ```bash
    pip install -r requirements.txt
    ```
 
 3. **Run the application:**
+
    ```bash
    python server.py
    ```
@@ -117,12 +126,29 @@ The application can use DynamoDB instead of SQLite for better scalability and pe
 2. **Create an IAM user** with S3 access permissions
 3. **Generate access keys** for the IAM user
 
-### 2. Environment Configuration
+### 2. AWS Configuration
 
-Add the following variables to your `.env` file or environment:
+The application uses AWS CLI credential chain for authentication. You have several options:
+
+#### Option A: AWS CLI Configuration (Recommended)
 
 ```bash
-# AWS S3 Configuration
+# Configure AWS CLI
+aws configure
+# Enter your AWS Access Key ID, Secret Access Key, Region, and Output format
+```
+
+#### Option B: IAM Role (Recommended for EC2 Production)
+
+```bash
+# For EC2 instances, attach an IAM role with required permissions
+# The application will automatically use IAM role credentials
+```
+
+#### Option C: Environment Variables
+
+```bash
+# Add to your .env file (not recommended for production)
 AWS_ACCESS_KEY_ID=your-aws-access-key-id
 AWS_SECRET_ACCESS_KEY=your-aws-secret-access-key
 AWS_REGION=us-east-1
@@ -130,28 +156,30 @@ S3_BUCKET_NAME=your-s3-bucket-name
 S3_ENDPOINT_URL=https://s3.amazonaws.com
 ```
 
+
+
 ### 3. IAM Permissions
 
 Your IAM user needs the following S3 permissions:
 
 ```json
 {
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Action": [
-                "s3:PutObject",
-                "s3:GetObject",
-                "s3:DeleteObject",
-                "s3:ListBucket"
-            ],
-            "Resource": [
-                "arn:aws:s3:::your-bucket-name",
-                "arn:aws:s3:::your-bucket-name/*"
-            ]
-        }
-    ]
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::your-bucket-name",
+        "arn:aws:s3:::your-bucket-name/*"
+      ]
+    }
+  ]
 }
 ```
 
@@ -206,14 +234,14 @@ python migrate_to_dynamodb.py
 
 ### 6. Storage Comparison
 
-| Feature | Local Storage | S3 Storage |
-|---------|---------------|------------|
-| **Scalability** | Limited by disk space | Virtually unlimited |
-| **Durability** | Depends on local backup | 99.999999999% (11 9's) |
-| **Access** | Direct file access | HTTP/HTTPS access |
-| **Cost** | Free (disk space) | Pay per use |
-| **Backup** | Manual | Automatic |
-| **Sharing** | File system dependent | Global access |
+| Feature         | Local Storage           | S3 Storage             |
+| --------------- | ----------------------- | ---------------------- |
+| **Scalability** | Limited by disk space   | Virtually unlimited    |
+| **Durability**  | Depends on local backup | 99.999999999% (11 9's) |
+| **Access**      | Direct file access      | HTTP/HTTPS access      |
+| **Cost**        | Free (disk space)       | Pay per use            |
+| **Backup**      | Manual                  | Automatic              |
+| **Sharing**     | File system dependent   | Global access          |
 
 ## 🎯 How to Use
 
@@ -234,6 +262,7 @@ python migrate_to_gambix_strata.py --old-db scraper_data.db --new-db gambix_stra
 The new Gambix Strata API provides comprehensive website optimization management:
 
 #### Create a User
+
 ```bash
 curl -X POST http://localhost:8080/api/gambix/users \
   -H "Content-Type: application/json" \
@@ -249,6 +278,7 @@ curl -X POST http://localhost:8080/api/gambix/users \
 ```
 
 #### Create a Project
+
 ```bash
 curl -X POST http://localhost:8080/api/gambix/projects \
   -H "Content-Type: application/json" \
@@ -264,6 +294,7 @@ curl -X POST http://localhost:8080/api/gambix/projects \
 ```
 
 #### Add Site Health Data
+
 ```bash
 curl -X POST http://localhost:8080/api/gambix/projects/project-uuid/health \
   -H "Content-Type: application/json" \
@@ -288,6 +319,7 @@ curl -X POST http://localhost:8080/api/gambix/projects/project-uuid/health \
 ```
 
 #### Get Dashboard Data
+
 ```bash
 curl http://localhost:8080/api/gambix/dashboard/user-uuid
 ```
@@ -295,6 +327,7 @@ curl http://localhost:8080/api/gambix/dashboard/user-uuid
 ### 3. Basic Web Scraping
 
 #### Via API (Recommended)
+
 ```bash
 # Scrape a website
 curl -X POST http://localhost:8080/api/scrape \
@@ -306,6 +339,7 @@ curl -X POST http://localhost:8080/api/scrape \
 ```
 
 #### Via Python Script
+
 ```python
 from main import scrape_website
 
@@ -318,6 +352,7 @@ print(f"Files saved to: {result['saved_directory']}")
 ### 2. View Scraped Data
 
 #### Check API Endpoints
+
 ```bash
 # Get all scraped sites
 curl http://localhost:8080/api/tracker/sites
@@ -333,6 +368,7 @@ curl http://localhost:8080/api/files
 ```
 
 #### Check Local Files
+
 ```bash
 # View scraped content
 ls -la scraped_data/
@@ -382,41 +418,50 @@ python test_tracker.py
 ### Gambix Strata API Endpoints
 
 #### User Management
+
 - `POST /api/gambix/users` - Create a new user
 - `GET /api/gambix/users/<email>` - Get user by email
 
 #### Project Management
+
 - `POST /api/gambix/projects` - Create a new project
 - `GET /api/gambix/projects/<user_id>` - Get all projects for a user
 
 #### Site Health
+
 - `POST /api/gambix/projects/<project_id>/health` - Add site health metrics
 - `GET /api/gambix/projects/<project_id>/health` - Get latest site health data
 
 #### Page Management
+
 - `POST /api/gambix/projects/<project_id>/pages` - Add a page to a project
 - `GET /api/gambix/projects/<project_id>/pages` - Get all pages for a project
 
 #### Recommendations
+
 - `POST /api/gambix/projects/<project_id>/recommendations` - Add a recommendation
 - `GET /api/gambix/projects/<project_id>/recommendations` - Get project recommendations
 - `PUT /api/gambix/recommendations/<recommendation_id>/status` - Update recommendation status
 
 #### Alerts
+
 - `POST /api/gambix/alerts` - Create a new alert
 - `GET /api/gambix/alerts/<user_id>` - Get alerts for a user
 - `PUT /api/gambix/alerts/<alert_id>/dismiss` - Dismiss an alert
 
 #### Analytics
+
 - `GET /api/gambix/projects/<project_id>/statistics` - Get project statistics
 - `GET /api/gambix/dashboard/<user_id>` - Get dashboard data for a user
 
 ### Legacy API Endpoints
 
 #### POST /api/scrape
+
 Scrape a website and store the data.
 
 **Request:**
+
 ```json
 {
   "url": "https://example.com",
@@ -425,6 +470,7 @@ Scrape a website and store the data.
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -435,9 +481,11 @@ Scrape a website and store the data.
 ```
 
 #### GET /api/tracker/stats
+
 Get overall statistics.
 
 **Response:**
+
 ```json
 {
   "total_sites": 15,
@@ -448,9 +496,11 @@ Get overall statistics.
 ```
 
 #### GET /api/tracker/sites
+
 Get all tracked sites.
 
 **Response:**
+
 ```json
 {
   "sites": [
@@ -466,17 +516,21 @@ Get all tracked sites.
 ```
 
 #### GET /api/user-sites?email=user@example.com
+
 Get sites scraped by a specific user.
 
 #### GET /api/files
+
 List all scraped files and directories.
 
 #### GET /api/health
+
 Health check endpoint.
 
 ### Error Handling
 
 All API endpoints return appropriate HTTP status codes:
+
 - `200`: Success
 - `400`: Bad Request
 - `404`: Not Found
@@ -507,6 +561,7 @@ strata_scraper/
 ## 🔍 What Gets Scraped
 
 ### Content Extraction
+
 - **HTML Structure**: Complete HTML markup
 - **CSS Files**: External and inline stylesheets
 - **JavaScript**: External and inline scripts
@@ -514,6 +569,7 @@ strata_scraper/
 - **Links**: Internal, external, and social media links
 
 ### SEO Analysis
+
 - **Meta Tags**: Title, description, keywords, robots
 - **Open Graph**: Social media optimization tags
 - **Twitter Cards**: Twitter-specific meta tags
@@ -523,6 +579,7 @@ strata_scraper/
 - **Sitemaps**: XML sitemap detection
 
 ### Analytics Detection
+
 - **Google Analytics**: GA4 and Universal Analytics
 - **Facebook Pixel**: Social media tracking
 - **Google Tag Manager**: GTM containers
@@ -531,6 +588,7 @@ strata_scraper/
 - **Other Tools**: Various marketing and analytics platforms
 
 ### Performance Metrics
+
 - **Word Count**: Content length analysis
 - **Link Count**: Internal/external link ratios
 - **Resource Count**: CSS, JS, image statistics
@@ -542,6 +600,7 @@ strata_scraper/
 The application uses SQLite with the following tables:
 
 ### Sites Table
+
 - `id`: Primary key
 - `domain`: Website domain
 - `first_scraped`: First scrape timestamp
@@ -551,6 +610,7 @@ The application uses SQLite with the following tables:
 - `updated_at`: Last update timestamp
 
 ### Scrapes Table
+
 - `id`: Primary key
 - `site_id`: Foreign key to sites table
 - `url`: Scraped URL
@@ -561,6 +621,7 @@ The application uses SQLite with the following tables:
 - Various statistics (links_count, word_count, etc.)
 
 ### SEO Metadata Table
+
 - `id`: Primary key
 - `scrape_id`: Foreign key to scrapes table
 - `meta_tags`: JSON field for meta tags
@@ -575,6 +636,7 @@ The application uses SQLite with the following tables:
 - Various SEO fields (canonical_url, robots_directive, etc.)
 
 ### Analytics Data Table
+
 - `id`: Primary key
 - `scrape_id`: Foreign key to scrapes table
 - `google_analytics`: JSON field for Google Analytics data
@@ -588,6 +650,7 @@ The application uses SQLite with the following tables:
 - `tracking_intensity`: Tracking intensity level
 
 ### Optimizations Table
+
 - `id`: Primary key
 - `site_id`: Foreign key to sites table
 - `original_url`: Original URL that was optimized
@@ -599,12 +662,15 @@ The application uses SQLite with the following tables:
 ## ⚙️ Configuration
 
 ### Environment Variables
+
 - `PORT`: Server port (default: 8080)
 - `HOST`: Server host (default: 0.0.0.0)
 - `DEBUG`: Debug mode (default: False)
 
 ### Docker Configuration
+
 The `docker-compose.yml` file configures:
+
 - Port mapping (8080:8080)
 - Volume mounts for data persistence
 - Health checks
@@ -613,6 +679,7 @@ The `docker-compose.yml` file configures:
 ## 🧪 Testing
 
 ### Run All Tests
+
 ```bash
 # Test database functionality
 python test_database.py
@@ -625,7 +692,9 @@ python test_tracker.py
 ```
 
 ### Test Database Operations
+
 The database test suite verifies:
+
 - Database initialization
 - Adding scraped sites
 - Adding optimizations
@@ -637,6 +706,7 @@ The database test suite verifies:
 ### Common Issues
 
 #### Docker Issues
+
 ```bash
 # If Docker daemon is not running
 open -a Docker
@@ -648,6 +718,7 @@ ports:
 ```
 
 #### Database Issues
+
 ```bash
 # Reset database (Docker)
 docker compose down
@@ -660,13 +731,16 @@ python server.py
 ```
 
 #### Permission Issues
+
 ```bash
 # Fix directory permissions
 chmod -R 755 data/ logs/ scraped_data/
 ```
 
 ### Logs
+
 Check application logs:
+
 ```bash
 # Docker logs
 docker compose logs
@@ -678,24 +752,28 @@ tail -f logs/app.log
 ## 📈 Use Cases
 
 ### 1. SEO Analysis
+
 - Analyze competitor websites
 - Track SEO changes over time
 - Identify missing meta tags
 - Monitor structured data implementation
 
 ### 2. Content Research
+
 - Extract content from multiple sources
 - Analyze content structure and quality
 - Track content updates
 - Monitor link building opportunities
 
 ### 3. Analytics Research
+
 - Identify tracking tools used by competitors
 - Monitor analytics implementation
 - Track marketing technology adoption
 - Analyze user tracking patterns
 
 ### 4. Performance Monitoring
+
 - Track website performance changes
 - Monitor resource optimization
 - Analyze loading speed factors
@@ -716,6 +794,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🆘 Support
 
 For issues and questions:
+
 1. Check the documentation above
 2. Review existing issues in the repository
 3. Create a new issue with detailed information including:
@@ -732,4 +811,4 @@ The application has been migrated from JSON-based tracking to SQLite database:
 2. **New System**: `scraper_data.db` SQLite database
 3. **Benefits**: Better performance, data integrity, and query capabilities
 
-The legacy `site_tracker.py` is kept for reference but is no longer used by the application. 
+The legacy `site_tracker.py` is kept for reference but is no longer used by the application.

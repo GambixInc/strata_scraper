@@ -275,9 +275,14 @@ def main():
     logger.info("🚀 DynamoDB Database Test Suite")
     logger.info("=" * 50)
     
-    # Check AWS credentials
-    if not os.getenv('AWS_ACCESS_KEY_ID') or not os.getenv('AWS_SECRET_ACCESS_KEY'):
-        logger.error("❌ AWS credentials not found. Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY")
+    # Check AWS credentials using CLI credential chain
+    try:
+        sts = boto3.client('sts')
+        identity = sts.get_caller_identity()
+        logger.info(f"✅ AWS credentials verified - Account: {identity['Account']}, User: {identity['Arn']}")
+    except Exception as e:
+        logger.error(f"❌ AWS credentials not found or invalid: {e}")
+        logger.error("Please ensure AWS CLI is configured or IAM role is attached")
         sys.exit(1)
     
     try:

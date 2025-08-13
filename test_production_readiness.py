@@ -28,22 +28,17 @@ def check_aws_credentials():
     """Check if AWS credentials are properly configured"""
     logger.info("🔍 Checking AWS Credentials...")
     
-    required_vars = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_REGION']
-    missing_vars = []
-    
-    for var in required_vars:
-        value = os.getenv(var)
-        if not value:
-            missing_vars.append(var)
-        elif 'your-' in value or 'placeholder' in value:
-            logger.warning(f"⚠️  {var} appears to be a placeholder value")
-    
-    if missing_vars:
-        logger.error(f"❌ Missing required AWS environment variables: {', '.join(missing_vars)}")
+    try:
+        # Test AWS credentials by trying to create a client
+        # This will use the AWS CLI credential chain automatically
+        sts = boto3.client('sts')
+        identity = sts.get_caller_identity()
+        logger.info(f"✅ AWS credentials verified - Account: {identity['Account']}, User: {identity['Arn']}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ AWS credentials not found or invalid: {e}")
+        logger.error("Please ensure AWS CLI is configured or IAM role is attached")
         return False
-    
-    logger.info("✅ AWS credentials are configured")
-    return True
 
 def test_aws_connectivity():
     """Test AWS connectivity and permissions"""

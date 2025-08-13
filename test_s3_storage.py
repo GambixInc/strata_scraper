@@ -142,13 +142,21 @@ def main():
     print("🚀 Starting S3 Storage Tests")
     print("=" * 50)
     
-    # Check environment variables
-    required_vars = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'S3_BUCKET_NAME']
-    missing_vars = [var for var in required_vars if not os.getenv(var)]
+    # Check AWS credentials using CLI credential chain
+    try:
+        import boto3
+        sts = boto3.client('sts')
+        identity = sts.get_caller_identity()
+        print(f"✅ AWS credentials verified - Account: {identity['Account']}, User: {identity['Arn']}")
+    except Exception as e:
+        print(f"❌ AWS credentials not found or invalid: {e}")
+        print("Please ensure AWS CLI is configured or IAM role is attached")
+        return False
     
-    if missing_vars:
-        print(f"❌ Missing required environment variables: {', '.join(missing_vars)}")
-        print("Please set these variables in your .env file or environment")
+    # Check required environment variables
+    if not os.getenv('S3_BUCKET_NAME'):
+        print("❌ Missing required environment variable: S3_BUCKET_NAME")
+        print("Please set S3_BUCKET_NAME in your .env file or environment")
         return False
     
     print("✅ All required environment variables are set")
