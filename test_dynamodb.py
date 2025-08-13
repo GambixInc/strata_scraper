@@ -6,6 +6,7 @@ Test script for DynamoDB database implementation
 import os
 import sys
 import argparse
+import boto3
 from dotenv import load_dotenv
 from dynamodb_database import DynamoDBDatabase
 import logging
