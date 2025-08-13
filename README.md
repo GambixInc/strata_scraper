@@ -99,9 +99,17 @@ This is the easiest and most reliable way to run the project:
    - **Frontend**: http://localhost:8080
    - **API**: http://localhost:8080/api
 
-## ☁️ S3 Storage Configuration (Optional)
+## ☁️ AWS Services Configuration
+
+The application can use AWS services for production deployments:
+
+### S3 Storage (Optional)
 
 The application can store scraped content in AWS S3 instead of local files. This is useful for production deployments and provides better scalability.
+
+### DynamoDB Database (Optional)
+
+The application can use DynamoDB instead of SQLite for better scalability and performance in production environments.
 
 ### 1. AWS Setup
 
@@ -152,6 +160,41 @@ Your IAM user needs the following S3 permissions:
 ```bash
 # Test with your S3 configuration
 python test_s3_storage.py
+```
+
+### 5. AWS Infrastructure Setup
+
+To set up S3 bucket and DynamoDB tables:
+
+```bash
+# 1. Test infrastructure setup (dry run)
+python setup_aws_infrastructure.py --dry-run
+
+# 2. Create infrastructure
+python setup_aws_infrastructure.py
+
+# 3. Verify infrastructure
+python setup_aws_infrastructure.py --dry-run
+
+# 4. Test production readiness
+python test_infrastructure_production_readiness.py
+```
+
+### 6. DynamoDB Migration
+
+To migrate from SQLite to DynamoDB:
+
+```bash
+# 1. Test DynamoDB functionality
+python test_dynamodb.py
+
+# 2. Run migration (dry run first)
+python migrate_to_dynamodb.py --dry-run
+
+# 3. Perform actual migration
+python migrate_to_dynamodb.py
+
+# 4. Update your application to use DynamoDBDatabase
 ```
 
 ### 5. How It Works

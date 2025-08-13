@@ -106,19 +106,20 @@ else
     exit 1
 fi
 
-# Check S3 configuration
-echo "☁️ Checking S3 configuration..."
+# Check AWS infrastructure
+echo "☁️ Checking AWS infrastructure..."
 if [ -f .env ]; then
     if grep -q "your-aws-access-key-id" .env || grep -q "your-s3-bucket-name" .env; then
-        echo "⚠️  S3 configuration appears to be using default values"
-        echo "💡 To enable S3 storage, update your .env file with actual AWS credentials"
-        echo "💡 Or run: python setup_s3.py"
+        echo "⚠️  AWS configuration appears to be using default values"
+        echo "💡 To enable AWS services, update your .env file with actual AWS credentials"
+        echo "💡 Or run: python setup_aws_infrastructure.py --dry-run"
     else
-        echo "✅ S3 configuration appears to be set up"
-        echo "💡 Test S3 connection with: python test_s3_storage.py"
+        echo "✅ AWS configuration appears to be set up"
+        echo "💡 Test infrastructure with: python setup_aws_infrastructure.py --dry-run"
+        echo "💡 Create infrastructure with: python setup_aws_infrastructure.py"
     fi
 else
-    echo "⚠️  No .env file found - S3 storage will not be available"
+    echo "⚠️  No .env file found - AWS services will not be available"
 fi
 
 # Show status
