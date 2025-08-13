@@ -78,9 +78,56 @@ class DynamoDBDatabase:
                     table = self.dynamodb.Table(table_name)
                     table.meta.client.get_waiter('table_exists').wait(TableName=table_name)
                     logger.info(f"✅ Table {table_name} is now active")
+                    
+                    # Wait for GSIs to become active
+                    logger.info(f"⏳ Waiting for GSIs in {table_name} to become active...")
+                    self._wait_for_gsi_active(table_name)
+                    logger.info(f"✅ GSIs in {table_name} are now active")
+                    
                 except Exception as e:
                     logger.warning(f"Failed to wait for table {table_name}: {e}")
-            logger.info("✅ All tables are ready for use")
+            logger.info("✅ All tables and GSIs are ready for use")
+    
+    def _wait_for_gsi_active(self, table_name: str, max_wait_time: int = 300):
+        """Wait for all GSIs in a table to become active"""
+        import time
+        
+        start_time = time.time()
+        while time.time() - start_time < max_wait_time:
+            try:
+                response = self.client.describe_table(TableName=table_name)
+                table_status = response['Table']['TableStatus']
+                
+                # Check if table is active
+                if table_status != 'ACTIVE':
+                    logger.info(f"Table {table_name} status: {table_status}")
+                    time.sleep(5)
+                    continue
+                
+                # Check GSI status
+                gsis = response['Table'].get('GlobalSecondaryIndexes', [])
+                if not gsis:
+                    # No GSIs, we're done
+                    return
+                
+                all_gsi_active = True
+                for gsi in gsis:
+                    gsi_status = gsi['IndexStatus']
+                    if gsi_status != 'ACTIVE':
+                        logger.info(f"GSI {gsi['IndexName']} in {table_name} status: {gsi_status}")
+                        all_gsi_active = False
+                        break
+                
+                if all_gsi_active:
+                    return
+                
+                time.sleep(5)
+                
+            except Exception as e:
+                logger.warning(f"Error checking GSI status for {table_name}: {e}")
+                time.sleep(5)
+        
+        logger.warning(f"Timeout waiting for GSIs in {table_name} to become active")
     
     def _create_users_table(self):
         """Create users table"""
