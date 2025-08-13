@@ -8,6 +8,14 @@ import json
 from datetime import datetime
 import uuid
 
+# Try to import S3 storage, but don't fail if not available
+try:
+    from s3_storage import S3Storage
+    S3_AVAILABLE = True
+except ImportError:
+    S3_AVAILABLE = False
+    print("Warning: S3 storage not available. Install boto3 to enable S3 storage.")
+
 # Suppress the InsecureRequestWarning when using verify=False (not recommended for production)
 requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
 
@@ -627,6 +635,37 @@ def save_content_to_files(scraped_data, url, base_filename=None):
     print(f"SEO Report saved to {seo_report_file}")
     
     return site_dir
+
+def save_content_to_s3(scraped_data, url, base_filename=None):
+    """
+    Save the scraped content to S3 bucket instead of local files.
+    
+    Args:
+        scraped_data (dict): The scraped data dictionary
+        url (str): The original URL that was scraped
+        base_filename (str): Optional base filename, if not provided will be generated from URL
+        
+    Returns:
+        str: The S3 prefix (directory) where files were saved, or None if failed
+    """
+    if not S3_AVAILABLE:
+        print("S3 storage not available. Please install boto3 and configure AWS credentials.")
+        return None
+    
+    try:
+        s3_storage = S3Storage()
+        s3_prefix = s3_storage.save_scraped_content_to_s3(scraped_data, url, base_filename)
+        
+        if s3_prefix:
+            print(f"✅ All content saved to S3: s3://{s3_storage.bucket_name}/{s3_prefix}")
+            return s3_prefix
+        else:
+            print("❌ Failed to save content to S3")
+            return None
+            
+    except Exception as e:
+        print(f"❌ Error saving to S3: {e}")
+        return None
 
 def analyze_scraped_content(scraped_data):
     """
@@ -1343,33 +1382,65 @@ if __name__ == "__main__":
         if seo_data.get('detailed_analytics'):
             print_analytics_report(seo_data['detailed_analytics'])
         
-        # Save content to files in scraped_sites folder
-        saved_dir = save_content_to_files(scraped_data, target_url)
-        if saved_dir:
-            print(f"\n📁 All files saved to: {saved_dir}")
-            
+        # Try to save to S3 first, fallback to local storage
+        saved_location = None
+        storage_type = None
+        
+        try:
+            # Attempt S3 storage
+            saved_location = save_content_to_s3(scraped_data, target_url)
+            if saved_location:
+                storage_type = 's3'
+                print(f"\n📁 All files saved to S3: {saved_location}")
+            else:
+                # Fallback to local storage
+                saved_location = save_content_to_files(scraped_data, target_url)
+                storage_type = 'local'
+                print(f"\n📁 All files saved locally: {saved_location}")
+        except Exception as s3_error:
+            print(f"⚠️ S3 storage failed, falling back to local storage: {s3_error}")
+            saved_location = save_content_to_files(scraped_data, target_url)
+            storage_type = 'local'
+            print(f"\n📁 All files saved locally: {saved_location}")
+        
+        if saved_location:
             # Save to database
             try:
                 from database import add_scraped_site
-                if add_scraped_site(target_url, scraped_data, saved_dir):
+                if add_scraped_site(target_url, scraped_data, saved_location):
                     print("✅ Data saved to SQLite database")
                 else:
                     print("❌ Failed to save to database")
             except ImportError:
                 print("⚠️ Database module not available, skipping database save")
-        
-        # Save analysis results as JSON
-        analysis_file = os.path.join(saved_dir, "content_analysis.json")
-        with open(analysis_file, "w", encoding="utf-8") as f:
-            json.dump(analysis_results, f, indent=2)
-        print(f"📊 Content analysis saved to: {analysis_file}")
-        
-        # Save detailed analytics data
-        if seo_data.get('detailed_analytics'):
-            analytics_file = os.path.join(saved_dir, "analytics_data.json")
-            with open(analytics_file, "w", encoding="utf-8") as f:
-                json.dump(seo_data['detailed_analytics'], f, indent=2)
-            print(f"📈 Analytics data saved to: {analytics_file}")
+            
+            # Save analysis results
+            if storage_type == 's3':
+                # For S3, we need to upload the analysis files separately
+                try:
+                    s3_storage = S3Storage()
+                    analysis_key = f"{saved_location}/content_analysis.json"
+                    if s3_storage.upload_json_content(analysis_results, analysis_key):
+                        print(f"📊 Content analysis saved to S3: {analysis_key}")
+                    
+                    if seo_data.get('detailed_analytics'):
+                        analytics_key = f"{saved_location}/analytics_data.json"
+                        if s3_storage.upload_json_content(seo_data['detailed_analytics'], analytics_key):
+                            print(f"📈 Analytics data saved to S3: {analytics_key}")
+                except Exception as e:
+                    print(f"⚠️ Failed to save analysis files to S3: {e}")
+            else:
+                # For local storage, save files directly
+                analysis_file = os.path.join(saved_location, "content_analysis.json")
+                with open(analysis_file, "w", encoding="utf-8") as f:
+                    json.dump(analysis_results, f, indent=2)
+                print(f"📊 Content analysis saved to: {analysis_file}")
+                
+                if seo_data.get('detailed_analytics'):
+                    analytics_file = os.path.join(saved_location, "analytics_data.json")
+                    with open(analytics_file, "w", encoding="utf-8") as f:
+                        json.dump(seo_data['detailed_analytics'], f, indent=2)
+                    print(f"📈 Analytics data saved to: {analytics_file}")
         
         # Print a quick summary of key findings
         print(f"\n🔍 QUICK SUMMARY")

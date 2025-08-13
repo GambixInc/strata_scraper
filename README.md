@@ -30,6 +30,7 @@ python migrate_to_gambix_strata.py --sample
 - **Analytics Detection**: Identify tracking tools like Google Analytics, Facebook Pixel, etc.
 - **Content Analysis**: Detailed content categorization and performance insights
 - **SQLite Database**: Persistent data storage with structured tables
+- **S3 Storage**: Cloud storage for scraped content (with local fallback)
 - **REST API**: Flask-based API for scraping and data retrieval
 - **Docker Support**: Containerized deployment with Docker Compose
 
@@ -97,6 +98,79 @@ This is the easiest and most reliable way to run the project:
 4. **Access the application:**
    - **Frontend**: http://localhost:8080
    - **API**: http://localhost:8080/api
+
+## ☁️ S3 Storage Configuration (Optional)
+
+The application can store scraped content in AWS S3 instead of local files. This is useful for production deployments and provides better scalability.
+
+### 1. AWS Setup
+
+1. **Create an S3 bucket** in your AWS account
+2. **Create an IAM user** with S3 access permissions
+3. **Generate access keys** for the IAM user
+
+### 2. Environment Configuration
+
+Add the following variables to your `.env` file or environment:
+
+```bash
+# AWS S3 Configuration
+AWS_ACCESS_KEY_ID=your-aws-access-key-id
+AWS_SECRET_ACCESS_KEY=your-aws-secret-access-key
+AWS_REGION=us-east-1
+S3_BUCKET_NAME=your-s3-bucket-name
+S3_ENDPOINT_URL=https://s3.amazonaws.com
+```
+
+### 3. IAM Permissions
+
+Your IAM user needs the following S3 permissions:
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:DeleteObject",
+                "s3:ListBucket"
+            ],
+            "Resource": [
+                "arn:aws:s3:::your-bucket-name",
+                "arn:aws:s3:::your-bucket-name/*"
+            ]
+        }
+    ]
+}
+```
+
+### 4. Testing S3 Integration
+
+```bash
+# Test with your S3 configuration
+python test_s3_storage.py
+```
+
+### 5. How It Works
+
+- **Automatic Fallback**: If S3 is not configured or fails, the app automatically falls back to local storage
+- **File Organization**: Scraped content is organized in S3 with the structure: `scraped_sites/{domain}_{timestamp}_{uuid}/`
+- **Content Types**: All scraped files (HTML, CSS, JS, metadata) are uploaded with appropriate MIME types
+- **Presigned URLs**: The system can generate temporary download URLs for S3 files
+
+### 6. Storage Comparison
+
+| Feature | Local Storage | S3 Storage |
+|---------|---------------|------------|
+| **Scalability** | Limited by disk space | Virtually unlimited |
+| **Durability** | Depends on local backup | 99.999999999% (11 9's) |
+| **Access** | Direct file access | HTTP/HTTPS access |
+| **Cost** | Free (disk space) | Pay per use |
+| **Backup** | Manual | Automatic |
+| **Sharing** | File system dependent | Global access |
 
 ## 🎯 How to Use
 

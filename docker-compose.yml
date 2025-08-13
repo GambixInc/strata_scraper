@@ -7,6 +7,12 @@ services:
     environment:
       - PORT=8080
       - HOST=0.0.0.0
+      # S3 Configuration (optional - uncomment and set your values)
+      # - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      # - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      # - AWS_REGION=${AWS_REGION:-us-east-1}
+      # - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      # - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-https://s3.amazonaws.com}
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data

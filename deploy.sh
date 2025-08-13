@@ -10,6 +10,7 @@ ENVIRONMENT=${1:-development}
 echo "🚀 Deploying Strata Scraper API in $ENVIRONMENT mode..."
 echo "⚠️  This deployment will ONLY affect the API service (strata-scraper)"
 echo "⚠️  Nginx and other services will remain untouched"
+echo "☁️  S3 storage integration is included (with automatic local fallback)"
 echo ""
 
 # Check if Docker is installed
@@ -31,6 +32,7 @@ mkdir -p logs data scraped_data optimized_sites config backups
 # Create .env file if it doesn't exist
 if [ ! -f .env ]; then
     echo "📝 Creating .env file..."
+    echo "💡 Tip: For S3 storage, update AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and S3_BUCKET_NAME"
     cat > .env << EOF
 # Application Configuration
 PORT=8080
@@ -53,10 +55,12 @@ RATE_LIMIT_STORAGE_URL=memory://
 LOG_LEVEL=INFO
 LOG_FILE=/app/logs/web_scraper.log
 
-# AWS Configuration
+# AWS S3 Configuration
 AWS_REGION=us-east-1
-AWS_ACCESS_KEY_ID=your-access-key
-AWS_SECRET_ACCESS_KEY=your-secret-key
+AWS_ACCESS_KEY_ID=your-aws-access-key-id
+AWS_SECRET_ACCESS_KEY=your-aws-secret-access-key
+S3_BUCKET_NAME=your-s3-bucket-name
+S3_ENDPOINT_URL=https://s3.amazonaws.com
 
 # Application Settings
 MAX_CONTENT_LENGTH=16777216
@@ -102,6 +106,21 @@ else
     exit 1
 fi
 
+# Check S3 configuration
+echo "☁️ Checking S3 configuration..."
+if [ -f .env ]; then
+    if grep -q "your-aws-access-key-id" .env || grep -q "your-s3-bucket-name" .env; then
+        echo "⚠️  S3 configuration appears to be using default values"
+        echo "💡 To enable S3 storage, update your .env file with actual AWS credentials"
+        echo "💡 Or run: python setup_s3.py"
+    else
+        echo "✅ S3 configuration appears to be set up"
+        echo "💡 Test S3 connection with: python test_s3_storage.py"
+    fi
+else
+    echo "⚠️  No .env file found - S3 storage will not be available"
+fi
+
 # Show status
 echo "📊 Strata Scraper service status:"
 docker-compose ps strata-scraper
@@ -115,4 +134,5 @@ echo "  Update: git pull && ./deploy.sh production"
 echo "🎉 Strata Scraper API deployment complete!"
 echo "🌐 API is running on http://localhost:8080"
 echo "🔍 Health check: http://localhost:8080/api/health"
+echo "☁️ S3 storage: Configured (with local fallback)"
 echo "⚠️  Note: This deployment only affects the API service. Nginx configuration remains unchanged."

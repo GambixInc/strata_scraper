@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
 import sqlite3
-from main import simple_web_scraper, save_content_to_files, get_safe_filename
+from main import simple_web_scraper, save_content_to_files, save_content_to_s3, get_safe_filename
 from database import GambixStrataDatabase, add_scraped_site, add_optimized_site, get_site_stats, export_summary, get_sites_by_user_email, get_all_sites
 import json
 from datetime import datetime
@@ -204,20 +204,39 @@ def scrape_website():
         
         if scraped_data:
             try:
-                # Save the scraped content to files
-                saved_dir = save_content_to_files(scraped_data, url)
+                # Try to save to S3 first, fallback to local storage
+                saved_location = None
+                storage_type = None
+                
+                try:
+                    # Attempt S3 storage
+                    saved_location = save_content_to_s3(scraped_data, url)
+                    if saved_location:
+                        storage_type = 's3'
+                        print(f"✅ Content saved to S3: {saved_location}")
+                    else:
+                        # Fallback to local storage
+                        saved_location = save_content_to_files(scraped_data, url)
+                        storage_type = 'local'
+                        print(f"✅ Content saved locally: {saved_location}")
+                except Exception as s3_error:
+                    print(f"⚠️ S3 storage failed, falling back to local storage: {s3_error}")
+                    saved_location = save_content_to_files(scraped_data, url)
+                    storage_type = 'local'
+                    print(f"✅ Content saved locally: {saved_location}")
                 
                 # Add to site tracker
-                if saved_dir:
-                    add_scraped_site(url, scraped_data, saved_dir, user_email) # Pass user_email
+                if saved_location:
+                    add_scraped_site(url, scraped_data, saved_location, user_email) # Pass user_email
                 
-                # Add the saved directory path to the response
-                scraped_data['saved_directory'] = saved_dir
+                # Add the saved location and storage type to the response
+                scraped_data['saved_location'] = saved_location
+                scraped_data['storage_type'] = storage_type
                 
                 return jsonify({
                     'success': True,
                     'data': scraped_data,
-                    'message': f'Content saved to: {saved_dir}'
+                    'message': f'Content saved to {storage_type}: {saved_location}'
                 })
             except Exception as save_error:
                 print(f"Error saving content: {save_error}")
@@ -785,17 +804,35 @@ def create_project():
             scraped_data = simple_web_scraper(domain_with_protocol)
             
             if scraped_data:
-                # Save the scraped content to files
-                saved_dir = save_content_to_files(scraped_data, domain)
+                # Try to save to S3 first, fallback to local storage
+                saved_location = None
+                storage_type = None
                 
-                if saved_dir:
-                    # Store the file path in the database
-                    db.update_project_scraped_files(project_id, saved_dir)
+                try:
+                    # Attempt S3 storage
+                    saved_location = save_content_to_s3(scraped_data, domain)
+                    if saved_location:
+                        storage_type = 's3'
+                        app.logger.info(f"✅ Content saved to S3: {saved_location}")
+                    else:
+                        # Fallback to local storage
+                        saved_location = save_content_to_files(scraped_data, domain)
+                        storage_type = 'local'
+                        app.logger.info(f"✅ Content saved locally: {saved_location}")
+                except Exception as s3_error:
+                    app.logger.warning(f"⚠️ S3 storage failed, falling back to local storage: {s3_error}")
+                    saved_location = save_content_to_files(scraped_data, domain)
+                    storage_type = 'local'
+                    app.logger.info(f"✅ Content saved locally: {saved_location}")
+                
+                if saved_location:
+                    # Store the file path and storage type in the database
+                    db.update_project_scraped_files(project_id, saved_location)
                     
                     # Update last_crawl timestamp
                     db.update_project_last_crawl(project_id)
                     
-                    app.logger.info(f"Successfully scraped {domain} for project {project_id}, files saved to {saved_dir}")
+                    app.logger.info(f"Successfully scraped {domain} for project {project_id}, files saved to {storage_type}: {saved_location}")
                 else:
                     app.logger.warning(f"Failed to save scraped files for {domain}")
             else:
