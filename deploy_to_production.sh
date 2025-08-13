@@ -5,6 +5,16 @@ set -e  # Exit on any error
 
 echo "🚀 Deploying Strata Scraper to Production (EC2 with IAM Role)"
 
+# Step 0: Install Python dependencies
+echo "📦 Installing Python dependencies..."
+if pip3 install -r requirements.txt; then
+    echo "✅ Dependencies installed successfully"
+else
+    echo "❌ Failed to install dependencies"
+    echo "💡 Try installing manually: pip3 install -r requirements.txt"
+    exit 1
+fi
+
 # Load environment variables from .env.production if it exists
 if [ -f ".env.production" ]; then
     echo "📋 Loading environment from .env.production"

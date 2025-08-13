@@ -1,4 +1,4 @@
-services:
+git sservices:
   strata-scraper:
     build: .
     container_name: strata-scraper-prod
