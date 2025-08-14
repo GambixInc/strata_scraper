@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
 import sqlite3
-from main import simple_web_scraper, save_content_to_files, save_content_to_s3, get_safe_filename
+from main import simple_web_scraper, save_content_to_s3, get_safe_filename
 from database_config import GambixStrataDatabase, add_scraped_site, add_optimized_site, get_site_stats, export_summary, get_sites_by_user_email, get_all_sites, USE_DYNAMODB
 import json
 from datetime import datetime
@@ -214,26 +214,28 @@ def scrape_website():
         
         if scraped_data:
             try:
-                # Try to save to S3 first, fallback to local storage
+                # Save to S3 storage (production default)
                 saved_location = None
                 storage_type = None
                 
                 try:
-                    # Attempt S3 storage
+                    # Use S3 storage for production
                     saved_location = save_content_to_s3(scraped_data, url)
                     if saved_location:
                         storage_type = 's3'
                         print(f"✅ Content saved to S3: {saved_location}")
                     else:
-                        # Fallback to local storage
-                        saved_location = save_content_to_files(scraped_data, url)
-                        storage_type = 'local'
-                        print(f"✅ Content saved locally: {saved_location}")
+                        print(f"❌ Failed to save to S3")
+                        return jsonify({
+                            'success': False,
+                            'error': 'Failed to save content to S3'
+                        }), 500
                 except Exception as s3_error:
-                    print(f"⚠️ S3 storage failed, falling back to local storage: {s3_error}")
-                    saved_location = save_content_to_files(scraped_data, url)
-                    storage_type = 'local'
-                    print(f"✅ Content saved locally: {saved_location}")
+                    print(f"❌ S3 storage failed: {s3_error}")
+                    return jsonify({
+                        'success': False,
+                        'error': f'S3 storage failed: {str(s3_error)}'
+                    }), 500
                 
                 # Add to site tracker
                 if saved_location:
@@ -814,26 +816,22 @@ def create_project():
             scraped_data = simple_web_scraper(domain_with_protocol)
             
             if scraped_data:
-                # Try to save to S3 first, fallback to local storage
+                # Save to S3 storage (production default)
                 saved_location = None
                 storage_type = None
                 
                 try:
-                    # Attempt S3 storage
+                    # Use S3 storage for production
                     saved_location = save_content_to_s3(scraped_data, domain)
                     if saved_location:
                         storage_type = 's3'
                         app.logger.info(f"✅ Content saved to S3: {saved_location}")
                     else:
-                        # Fallback to local storage
-                        saved_location = save_content_to_files(scraped_data, domain)
-                        storage_type = 'local'
-                        app.logger.info(f"✅ Content saved locally: {saved_location}")
+                        app.logger.warning(f"❌ Failed to save to S3 for {domain}")
+                        saved_location = None
                 except Exception as s3_error:
-                    app.logger.warning(f"⚠️ S3 storage failed, falling back to local storage: {s3_error}")
-                    saved_location = save_content_to_files(scraped_data, domain)
-                    storage_type = 'local'
-                    app.logger.info(f"✅ Content saved locally: {saved_location}")
+                    app.logger.error(f"❌ S3 storage failed for {domain}: {s3_error}")
+                    saved_location = None
                 
                 if saved_location:
                     # Store the file path and storage type in the database
@@ -1044,7 +1042,7 @@ def get_project_scraped_data(project_id):
                     }
                 })
             else:
-                # Local storage - resolve relative path to absolute
+                # File path - resolve relative path to absolute
                 if not os.path.isabs(scraped_files_path):
                     # If it's a relative path, make it absolute relative to the current working directory
                     scraped_files_path = os.path.abspath(scraped_files_path)
@@ -1436,26 +1434,22 @@ def rescrape_project(project_id):
         scraped_data = simple_web_scraper(domain_with_protocol)
         
         if scraped_data:
-            # Try to save to S3 first, fallback to local storage
+            # Save to S3 storage (production default)
             saved_location = None
             storage_type = None
             
             try:
-                # Attempt S3 storage
+                # Use S3 storage for production
                 saved_location = save_content_to_s3(scraped_data, domain)
                 if saved_location:
                     storage_type = 's3'
                     app.logger.info(f"✅ Content saved to S3: {saved_location}")
                 else:
-                    # Fallback to local storage
-                    saved_location = save_content_to_files(scraped_data, domain)
-                    storage_type = 'local'
-                    app.logger.info(f"✅ Content saved locally: {saved_location}")
+                    app.logger.warning(f"❌ Failed to save to S3 for {domain}")
+                    saved_location = None
             except Exception as s3_error:
-                app.logger.warning(f"⚠️ S3 storage failed, falling back to local storage: {s3_error}")
-                saved_location = save_content_to_files(scraped_data, domain)
-                storage_type = 'local'
-                app.logger.info(f"✅ Content saved locally: {saved_location}")
+                app.logger.error(f"❌ S3 storage failed for {domain}: {s3_error}")
+                saved_location = None
             
             if saved_location:
                 # Store the file path and storage type in the database
@@ -1519,9 +1513,8 @@ if __name__ == '__main__':
     print(f"   - Alerts: http://localhost:{PORT}/api/gambix/alerts")
     print(f"   - Dashboard: http://localhost:{PORT}/api/gambix/dashboard/<user_id>")
     print(f"\n📂 Files will be saved to:")
-    print("   - scraped_data/ (original scraped content)")
-    print("   - optimized_sites/ (optimized versions)")
-    print("   - data/gambix_strata.db (Gambix Strata SQLite database)")
+    print("   - S3 bucket: gambix-strata-production")
+    print("   - DynamoDB tables: gambix_strata_*")
     print("\nPress Ctrl+C to stop the server")
     
     app.run(debug=DEBUG, host=HOST, port=PORT) 

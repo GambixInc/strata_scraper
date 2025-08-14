@@ -395,246 +395,7 @@ def get_safe_filename(url):
     
     return f"{domain}_{path}_{timestamp}_{unique_id}"
 
-def save_content_to_files(scraped_data, url, base_filename=None):
-    """
-    Save the scraped content to separate files in the scraped_sites folder.
-    
-    Args:
-        scraped_data (dict): The scraped data dictionary
-        url (str): The original URL that was scraped
-        base_filename (str): Optional base filename, if not provided will be generated from URL
-    """
-    if not scraped_data:
-        print("No data to save.")
-        return None
-    
-    # Create scraped_sites directory if it doesn't exist
-    scraped_dir = "scraped_sites"
-    if not os.path.exists(scraped_dir):
-        os.makedirs(scraped_dir)
-    
-    # Generate filename from URL if not provided
-    if not base_filename:
-        base_filename = get_safe_filename(url)
-    
-    # Create a subdirectory for this specific scrape
-    site_dir = os.path.join(scraped_dir, base_filename)
-    if not os.path.exists(site_dir):
-        os.makedirs(site_dir)
-    
-    # Save HTML content
-    html_file = os.path.join(site_dir, "index.html")
-    with open(html_file, "w", encoding="utf-8") as f:
-        f.write(scraped_data['html_content'])
-    print(f"HTML content saved to {html_file}")
-    
-    # Save CSS content
-    css_file = os.path.join(site_dir, "styles.css")
-    with open(css_file, "w", encoding="utf-8") as f:
-        f.write("/* === INLINE STYLES === */\n")
-        for i, style in enumerate(scraped_data['css_content']['inline_styles']):
-            f.write(f"\n/* --- Inline Style {i+1} --- */\n")
-            f.write(style)
-            f.write("\n")
-        
-        f.write("\n\n/* === INTERNAL STYLESHEETS === */\n")
-        for i, style in enumerate(scraped_data['css_content']['internal_stylesheets']):
-            f.write(f"\n/* --- Internal Stylesheet {i+1} --- */\n")
-            f.write(style)
-            f.write("\n")
-        
-        f.write("\n\n/* === EXTERNAL STYLESHEETS === */\n")
-        for i, link in enumerate(scraped_data['css_content']['external_stylesheets']):
-            f.write(f"/* {i+1}. {link} */\n")
-    
-    print(f"CSS content saved to {css_file}")
-    
-    # Save JavaScript content
-    js_file = os.path.join(site_dir, "scripts.js")
-    with open(js_file, "w", encoding="utf-8") as f:
-        f.write("// === INLINE SCRIPTS ===\n")
-        for i, script in enumerate(scraped_data['js_content']['inline_scripts']):
-            f.write(f"\n// --- Inline Script {i+1} ---\n")
-            f.write(script)
-            f.write("\n")
-        
-        f.write("\n\n// === EXTERNAL SCRIPTS ===\n")
-        for i, link in enumerate(scraped_data['js_content']['external_scripts']):
-            f.write(f"// {i+1}. {link}\n")
-    
-    print(f"JavaScript content saved to {js_file}")
-    
-    # Save links
-    links_file = os.path.join(site_dir, "links.txt")
-    with open(links_file, "w", encoding="utf-8") as f:
-        f.write(f"Links found on: {url}\n")
-        f.write(f"Scraped on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write("=" * 50 + "\n\n")
-        for i, link in enumerate(scraped_data['links'], 1):
-            f.write(f"{i}. {link}\n")
-    
-    print(f"Links saved to {links_file}")
-    
-    # Save metadata as JSON
-    metadata_file = os.path.join(site_dir, "metadata.json")
-    metadata = {
-        "original_url": url,
-        "scraped_at": datetime.now().isoformat(),
-        "title": scraped_data['title'],
-        "stats": {
-            "links_count": len(scraped_data['links']),
-            "inline_styles_count": len(scraped_data['css_content']['inline_styles']),
-            "internal_stylesheets_count": len(scraped_data['css_content']['internal_stylesheets']),
-            "external_stylesheets_count": len(scraped_data['css_content']['external_stylesheets']),
-            "inline_scripts_count": len(scraped_data['js_content']['inline_scripts']),
-            "external_scripts_count": len(scraped_data['js_content']['external_scripts'])
-        },
-        "seo_metadata": scraped_data.get('seo_metadata', {})
-    }
-    
-    with open(metadata_file, "w", encoding="utf-8") as f:
-        json.dump(metadata, f, indent=2)
-    
-    print(f"Metadata saved to {metadata_file}")
-    
-    # Save detailed SEO report
-    seo_report_file = os.path.join(site_dir, "seo_report.txt")
-    with open(seo_report_file, "w", encoding="utf-8") as f:
-        f.write(f"SEO Analysis Report for: {url}\n")
-        f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write("=" * 80 + "\n\n")
-        
-        seo_data = scraped_data.get('seo_metadata', {})
-        
-        # Basic SEO Info
-        f.write("BASIC SEO INFORMATION\n")
-        f.write("-" * 40 + "\n")
-        f.write(f"Title: {scraped_data['title']}\n")
-        f.write(f"Canonical URL: {seo_data.get('canonical_url', 'Not found')}\n")
-        f.write(f"Robots Directive: {seo_data.get('robots_directive', 'Not found')}\n")
-        f.write(f"Language: {seo_data.get('language', 'Not specified')}\n")
-        f.write(f"Charset: {seo_data.get('charset', 'Not specified')}\n")
-        f.write(f"Viewport: {seo_data.get('viewport', 'Not specified')}\n")
-        f.write(f"Favicon: {seo_data.get('favicon', 'Not found')}\n")
-        f.write(f"Sitemap: {seo_data.get('sitemap', 'Not found')}\n\n")
-        
-        # Meta Tags
-        f.write("META TAGS\n")
-        f.write("-" * 40 + "\n")
-        for name, content in seo_data.get('meta_tags', {}).items():
-            f.write(f"{name}: {content}\n")
-        f.write("\n")
-        
-        # Open Graph
-        if seo_data.get('open_graph'):
-            f.write("OPEN GRAPH TAGS\n")
-            f.write("-" * 40 + "\n")
-            for name, content in seo_data['open_graph'].items():
-                f.write(f"{name}: {content}\n")
-            f.write("\n")
-        
-        # Twitter Cards
-        if seo_data.get('twitter_cards'):
-            f.write("TWITTER CARD TAGS\n")
-            f.write("-" * 40 + "\n")
-            for name, content in seo_data['twitter_cards'].items():
-                f.write(f"{name}: {content}\n")
-            f.write("\n")
-        
-        # Headings Structure
-        f.write("HEADINGS STRUCTURE\n")
-        f.write("-" * 40 + "\n")
-        for level in range(1, 7):
-            headings = seo_data.get('headings', {}).get(f'h{level}', [])
-            if headings:
-                f.write(f"H{level} Headings ({len(headings)}):\n")
-                for i, heading in enumerate(headings, 1):
-                    f.write(f"  {i}. {heading}\n")
-                f.write("\n")
-        
-        # Images Analysis
-        f.write("IMAGES ANALYSIS\n")
-        f.write("-" * 40 + "\n")
-        images = seo_data.get('images', [])
-        f.write(f"Total Images: {len(images)}\n")
-        if images:
-            images_without_alt = len([img for img in images if not img['alt']])
-            f.write(f"Images without Alt Text: {images_without_alt}\n")
-            f.write(f"Alt Text Coverage: {((len(images) - images_without_alt) / len(images) * 100):.1f}%\n\n")
-        else:
-            f.write("Images without Alt Text: 0\n")
-            f.write("Alt Text Coverage: N/A (no images found)\n\n")
-        
-        # Links Analysis
-        f.write("LINKS ANALYSIS\n")
-        f.write("-" * 40 + "\n")
-        internal_links = seo_data.get('internal_links', [])
-        external_links = seo_data.get('external_links', [])
-        social_links = seo_data.get('social_links', [])
-        
-        f.write(f"Internal Links: {len(internal_links)}\n")
-        f.write(f"External Links: {len(external_links)}\n")
-        f.write(f"Social Media Links: {len(social_links)}\n")
-        f.write(f"Total Links: {len(internal_links) + len(external_links)}\n\n")
-        
-        # Content Analysis
-        f.write("CONTENT ANALYSIS\n")
-        f.write("-" * 40 + "\n")
-        f.write(f"Word Count: {seo_data.get('word_count', 0):,}\n")
-        
-        # Keyword Density
-        keywords = seo_data.get('keyword_density', {})
-        if keywords:
-            f.write("Top Keywords (by frequency):\n")
-            for i, (word, count) in enumerate(list(keywords.items())[:10], 1):
-                f.write(f"  {i}. {word}: {count} times\n")
-        f.write("\n")
-        
-        # Analytics Detection
-        analytics = seo_data.get('analytics', [])
-        if analytics:
-            f.write("ANALYTICS & TRACKING\n")
-            f.write("-" * 40 + "\n")
-            for analytic in analytics:
-                f.write(f"Type: {analytic['type']}\n")
-                if analytic['src']:
-                    f.write(f"Source: {analytic['src']}\n")
-                f.write("\n")
-        
-        # Page Speed Indicators
-        speed_indicators = seo_data.get('page_speed_indicators', {})
-        f.write("PAGE SPEED INDICATORS\n")
-        f.write("-" * 40 + "\n")
-        f.write(f"Total Scripts: {speed_indicators.get('total_scripts', 0)}\n")
-        f.write(f"Total Stylesheets: {speed_indicators.get('total_stylesheets', 0)}\n")
-        f.write(f"Inline Styles: {speed_indicators.get('inline_styles', 0)}\n")
-        f.write(f"Total Links: {speed_indicators.get('total_links', 0)}\n")
-        f.write(f"Total Images: {speed_indicators.get('total_images', 0)}\n")
-        f.write(f"Images without Alt: {speed_indicators.get('images_without_alt', 0)}\n\n")
-        
-        # Structured Data
-        structured_data = seo_data.get('structured_data', [])
-        if structured_data:
-            f.write("STRUCTURED DATA\n")
-            f.write("-" * 40 + "\n")
-            f.write(f"Found {len(structured_data)} structured data blocks\n")
-            for i, data in enumerate(structured_data, 1):
-                f.write(f"Block {i}: {type(data).__name__}\n")
-        f.write("\n")
-        
-        # RSS Feeds
-        rss_feeds = seo_data.get('rss_feeds', [])
-        if rss_feeds:
-            f.write("RSS FEEDS\n")
-            f.write("-" * 40 + "\n")
-            for feed in rss_feeds:
-                f.write(f"Type: {feed['type']}\n")
-                f.write(f"Title: {feed['title']}\n")
-                f.write(f"URL: {feed['href']}\n\n")
-    
-    print(f"SEO Report saved to {seo_report_file}")
-    
-    return site_dir
+
 
 def save_content_to_s3(scraped_data, url, base_filename=None):
     """
@@ -1382,65 +1143,46 @@ if __name__ == "__main__":
         if seo_data.get('detailed_analytics'):
             print_analytics_report(seo_data['detailed_analytics'])
         
-        # Try to save to S3 first, fallback to local storage
+        # Save to S3 storage (production default)
         saved_location = None
         storage_type = None
         
         try:
-            # Attempt S3 storage
+            # Use S3 storage for production
             saved_location = save_content_to_s3(scraped_data, target_url)
             if saved_location:
                 storage_type = 's3'
                 print(f"\n📁 All files saved to S3: {saved_location}")
             else:
-                # Fallback to local storage
-                saved_location = save_content_to_files(scraped_data, target_url)
-                storage_type = 'local'
-                print(f"\n📁 All files saved locally: {saved_location}")
+                print(f"\n❌ Failed to save to S3")
         except Exception as s3_error:
-            print(f"⚠️ S3 storage failed, falling back to local storage: {s3_error}")
-            saved_location = save_content_to_files(scraped_data, target_url)
-            storage_type = 'local'
-            print(f"\n📁 All files saved locally: {saved_location}")
+            print(f"❌ S3 storage failed: {s3_error}")
+            saved_location = None
         
         if saved_location:
             # Save to database
             try:
                 from database_config import add_scraped_site
                 if add_scraped_site(target_url, scraped_data, saved_location):
-                    print("✅ Data saved to SQLite database")
+                    print("✅ Data saved to database")
                 else:
                     print("❌ Failed to save to database")
             except ImportError:
                 print("⚠️ Database module not available, skipping database save")
             
-            # Save analysis results
-            if storage_type == 's3':
-                # For S3, we need to upload the analysis files separately
-                try:
-                    s3_storage = S3Storage()
-                    analysis_key = f"{saved_location}/content_analysis.json"
-                    if s3_storage.upload_json_content(analysis_results, analysis_key):
-                        print(f"📊 Content analysis saved to S3: {analysis_key}")
-                    
-                    if seo_data.get('detailed_analytics'):
-                        analytics_key = f"{saved_location}/analytics_data.json"
-                        if s3_storage.upload_json_content(seo_data['detailed_analytics'], analytics_key):
-                            print(f"📈 Analytics data saved to S3: {analytics_key}")
-                except Exception as e:
-                    print(f"⚠️ Failed to save analysis files to S3: {e}")
-            else:
-                # For local storage, save files directly
-                analysis_file = os.path.join(saved_location, "content_analysis.json")
-                with open(analysis_file, "w", encoding="utf-8") as f:
-                    json.dump(analysis_results, f, indent=2)
-                print(f"📊 Content analysis saved to: {analysis_file}")
+            # Save analysis results to S3
+            try:
+                s3_storage = S3Storage()
+                analysis_key = f"{saved_location}/content_analysis.json"
+                if s3_storage.upload_json_content(analysis_results, analysis_key):
+                    print(f"📊 Content analysis saved to S3: {analysis_key}")
                 
                 if seo_data.get('detailed_analytics'):
-                    analytics_file = os.path.join(saved_location, "analytics_data.json")
-                    with open(analytics_file, "w", encoding="utf-8") as f:
-                        json.dump(seo_data['detailed_analytics'], f, indent=2)
-                    print(f"📈 Analytics data saved to: {analytics_file}")
+                    analytics_key = f"{saved_location}/analytics_data.json"
+                    if s3_storage.upload_json_content(seo_data['detailed_analytics'], analytics_key):
+                        print(f"📈 Analytics data saved to S3: {analytics_key}")
+            except Exception as e:
+                print(f"⚠️ Failed to save analysis files to S3: {e}")
         
         # Print a quick summary of key findings
         print(f"\n🔍 QUICK SUMMARY")
