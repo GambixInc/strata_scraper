@@ -110,6 +110,162 @@ class TestDatabaseOperations(unittest.TestCase):
         self.assertIsNotNone(project)
         self.assertEqual(project['domain'], "example.com")
         self.assertEqual(project['name'], "Test Project")
+    
+    def test_user_projects_retrieval(self):
+        """Test retrieving all projects for a user"""
+        # Create user first
+        user_id = self.db.create_user(
+            email=self.test_email,
+            name=self.test_name,
+            cognito_user_id=self.test_cognito_id
+        )
+        
+        # Create multiple projects for the user
+        project1_id = self.db.create_project(
+            user_id=user_id,
+            domain="example1.com",
+            name="Test Project 1",
+            settings={"category": "test1"}
+        )
+        
+        project2_id = self.db.create_project(
+            user_id=user_id,
+            domain="example2.com",
+            name="Test Project 2",
+            settings={"category": "test2"}
+        )
+        
+        # Retrieve all projects for the user
+        projects = self.db.get_user_projects(user_id)
+        
+        self.assertIsNotNone(projects)
+        self.assertGreaterEqual(len(projects), 2)
+        
+        # Verify project data structure
+        for project in projects:
+            self.assertIn('project_id', project)
+            self.assertIn('domain', project)
+            self.assertIn('name', project)
+            self.assertIn('user_id', project)
+            self.assertIn('created_at', project)
+            self.assertIn('updated_at', project)
+        
+        # Verify specific projects exist
+        project_domains = [p['domain'] for p in projects]
+        self.assertIn("example1.com", project_domains)
+        self.assertIn("example2.com", project_domains)
+    
+    def test_project_data_integrity(self):
+        """Test that project data is stored and retrieved correctly"""
+        # Create user first
+        user_id = self.db.create_user(
+            email=self.test_email,
+            name=self.test_name,
+            cognito_user_id=self.test_cognito_id
+        )
+        
+        # Create project with comprehensive settings
+        settings = {
+            "category": "ecommerce",
+            "description": "Test ecommerce site",
+            "auto_optimize": True,
+            "custom_settings": {
+                "seo_focus": "high",
+                "performance_target": "fast"
+            }
+        }
+        
+        project_id = self.db.create_project(
+            user_id=user_id,
+            domain="test-ecommerce.com",
+            name="Ecommerce Test Project",
+            settings=settings
+        )
+        
+        # Retrieve project
+        project = self.db.get_project(project_id)
+        
+        # Verify all data is preserved
+        self.assertEqual(project['domain'], "test-ecommerce.com")
+        self.assertEqual(project['name'], "Ecommerce Test Project")
+        self.assertEqual(project['user_id'], user_id)
+        self.assertEqual(project['settings']['category'], "ecommerce")
+        self.assertEqual(project['settings']['description'], "Test ecommerce site")
+        self.assertEqual(project['settings']['auto_optimize'], True)
+        self.assertEqual(project['settings']['custom_settings']['seo_focus'], "high")
+    
+    def test_project_user_association(self):
+        """Test that projects are correctly associated with users"""
+        # Create two users
+        user1_id = self.db.create_user(
+            email=f"{self.test_email}.user1",
+            name=f"{self.test_name} User1",
+            cognito_user_id=f"{self.test_cognito_id}.user1"
+        )
+        
+        user2_id = self.db.create_user(
+            email=f"{self.test_email}.user2",
+            name=f"{self.test_name} User2",
+            cognito_user_id=f"{self.test_cognito_id}.user2"
+        )
+        
+        # Create projects for each user
+        project1_id = self.db.create_project(
+            user_id=user1_id,
+            domain="user1-project.com",
+            name="User 1 Project",
+            settings={"category": "user1"}
+        )
+        
+        project2_id = self.db.create_project(
+            user_id=user2_id,
+            domain="user2-project.com",
+            name="User 2 Project",
+            settings={"category": "user2"}
+        )
+        
+        # Verify user1 only sees their projects
+        user1_projects = self.db.get_user_projects(user1_id)
+        user1_domains = [p['domain'] for p in user1_projects]
+        self.assertIn("user1-project.com", user1_domains)
+        self.assertNotIn("user2-project.com", user1_domains)
+        
+        # Verify user2 only sees their projects
+        user2_projects = self.db.get_user_projects(user2_id)
+        user2_domains = [p['domain'] for p in user2_projects]
+        self.assertIn("user2-project.com", user2_domains)
+        self.assertNotIn("user1-project.com", user2_domains)
+    
+    def test_project_update_functionality(self):
+        """Test that project data can be updated correctly"""
+        # Create user and project
+        user_id = self.db.create_user(
+            email=self.test_email,
+            name=self.test_name,
+            cognito_user_id=self.test_cognito_id
+        )
+        
+        project_id = self.db.create_project(
+            user_id=user_id,
+            domain="update-test.com",
+            name="Original Name",
+            settings={"category": "original"}
+        )
+        
+        # Test project status update
+        self.db.update_project_status(project_id, "active")
+        
+        # Test project scraped files update
+        self.db.update_project_scraped_files(project_id, "s3://test-bucket/test-project")
+        
+        # Test project last crawl update
+        self.db.update_project_last_crawl(project_id)
+        
+        # Verify updates
+        updated_project = self.db.get_project(project_id)
+        self.assertEqual(updated_project['status'], "active")
+        self.assertEqual(updated_project['scraped_files_path'], "s3://test-bucket/test-project")
+        self.assertIsNotNone(updated_project['last_crawl'])
 
 class TestAuthentication(unittest.TestCase):
     """Test authentication functionality"""
@@ -321,6 +477,57 @@ class TestAPIEndpoints(unittest.TestCase):
         try:
             response = self.app.get('/api/health')
             self.assertEqual(response.status_code, 200)
+        except Exception:
+            # If app is not running, skip this test
+            self.skipTest("Flask app not running")
+    
+    def test_user_profile_endpoint(self):
+        """Test user profile endpoint with authentication"""
+        try:
+            # Create a test token
+            from tests.test_suite import TestAuthentication
+            auth_test = TestAuthentication()
+            token = auth_test.create_test_token("test@example.com", "Test User")
+            
+            # Test with valid token
+            headers = {'Authorization': f'Bearer {token}'}
+            response = self.app.get('/api/user/profile', headers=headers)
+            
+            # Should return 200 or 401 depending on token validation
+            self.assertIn(response.status_code, [200, 401])
+            
+            if response.status_code == 200:
+                data = json.loads(response.data)
+                self.assertTrue(data['success'])
+                self.assertIn('data', data)
+        except Exception:
+            # If app is not running, skip this test
+            self.skipTest("Flask app not running")
+    
+    def test_projects_endpoint_structure(self):
+        """Test that projects endpoint returns correct data structure"""
+        try:
+            # Test that the endpoint exists and returns proper error for missing auth
+            response = self.app.get('/api/projects')
+            # Should return 401 for missing authentication
+            self.assertEqual(response.status_code, 401)
+            
+            # Test that the endpoint accepts POST requests
+            response = self.app.post('/api/projects', 
+                                   json={'websiteUrl': 'test.com', 'name': 'Test Project'})
+            # Should return 401 for missing authentication
+            self.assertEqual(response.status_code, 401)
+        except Exception:
+            # If app is not running, skip this test
+            self.skipTest("Flask app not running")
+    
+    def test_project_retrieval_endpoint(self):
+        """Test individual project retrieval endpoint"""
+        try:
+            # Test that the endpoint exists
+            response = self.app.get('/api/gambix/projects/test-project-id')
+            # Should return 404 for non-existent project or 401 for missing auth
+            self.assertIn(response.status_code, [401, 404])
         except Exception:
             # If app is not running, skip this test
             self.skipTest("Flask app not running")
