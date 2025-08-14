@@ -1032,20 +1032,44 @@ def get_project_scraped_data(project_id):
         
         # Read scraped data from files
         try:
+            # Handle both relative and absolute paths
+            if scraped_files_path.startswith('s3://'):
+                # S3 storage - we'll need to implement S3 file reading
+                app.logger.warning(f"S3 storage not yet implemented for reading: {scraped_files_path}")
+                return jsonify({
+                    'success': True,
+                    'data': {
+                        'has_scraped_data': False,
+                        'message': 'S3 storage reading not yet implemented'
+                    }
+                })
+            else:
+                # Local storage - resolve relative path to absolute
+                if not os.path.isabs(scraped_files_path):
+                    # If it's a relative path, make it absolute relative to the current working directory
+                    scraped_files_path = os.path.abspath(scraped_files_path)
+                
+                app.logger.info(f"Reading scraped data from: {scraped_files_path}")
+            
             # Read metadata.json
             metadata_path = os.path.join(scraped_files_path, 'metadata.json')
             if os.path.exists(metadata_path):
-                with open(metadata_path, 'r') as f:
+                with open(metadata_path, 'r', encoding='utf-8') as f:
                     metadata = json.load(f)
+                app.logger.info(f"Successfully read metadata from: {metadata_path}")
             else:
+                app.logger.warning(f"Metadata file not found: {metadata_path}")
                 metadata = {}
             
             # Read seo_report.txt
             seo_report_path = os.path.join(scraped_files_path, 'seo_report.txt')
             seo_report = ""
             if os.path.exists(seo_report_path):
-                with open(seo_report_path, 'r') as f:
+                with open(seo_report_path, 'r', encoding='utf-8') as f:
                     seo_report = f.read()
+                app.logger.info(f"Successfully read SEO report from: {seo_report_path}")
+            else:
+                app.logger.warning(f"SEO report file not found: {seo_report_path}")
             
             # Extract key data from metadata
             seo_data = metadata.get('seo_metadata', {})
@@ -1065,6 +1089,7 @@ def get_project_scraped_data(project_id):
                 'stats': metadata.get('stats', {})
             }
             
+            app.logger.info(f"Successfully processed scraped data for project {project_id}")
             return jsonify({
                 'success': True,
                 'data': scraped_data
@@ -1072,11 +1097,12 @@ def get_project_scraped_data(project_id):
             
         except Exception as file_error:
             app.logger.error(f"Error reading scraped files: {file_error}")
+            app.logger.error(f"Attempted path: {scraped_files_path}")
             return jsonify({
                 'success': True,
                 'data': {
                     'has_scraped_data': False,
-                    'message': 'Error reading scraped data files'
+                    'message': f'Error reading scraped data files: {str(file_error)}'
                 }
             })
         
@@ -1311,6 +1337,157 @@ def get_dashboard_data_legacy(user_id):
     except Exception as e:
         app.logger.error(f"Error getting dashboard data: {e}")
         return jsonify({'success': False, 'error': 'Failed to get dashboard data'}), 500
+
+@app.route('/api/debug/project/<project_id>/files', methods=['GET'])
+@require_auth
+def debug_project_files(project_id):
+    """Debug endpoint to check project file paths and existence"""
+    try:
+        db = GambixStrataDatabase()
+        
+        # Get project
+        project = db.get_project(project_id)
+        if not project:
+            return jsonify({'success': False, 'error': 'Project not found'}), 404
+        
+        # Verify project belongs to current user
+        email = request.current_user['email']
+        user_data = db.get_user_by_email(email)
+        if not user_data or project['user_id'] != user_data['user_id']:
+            return jsonify({'success': False, 'error': 'Access denied'}), 403
+        
+        scraped_files_path = project.get('scraped_files_path')
+        
+        debug_info = {
+            'project_id': project_id,
+            'project_name': project.get('name'),
+            'domain': project.get('domain'),
+            'scraped_files_path': scraped_files_path,
+            'path_exists': False,
+            'is_absolute': False,
+            'current_working_dir': os.getcwd(),
+            'files': []
+        }
+        
+        if scraped_files_path:
+            debug_info['is_absolute'] = os.path.isabs(scraped_files_path)
+            
+            # Resolve path
+            if not os.path.isabs(scraped_files_path):
+                resolved_path = os.path.abspath(scraped_files_path)
+            else:
+                resolved_path = scraped_files_path
+            
+            debug_info['resolved_path'] = resolved_path
+            debug_info['path_exists'] = os.path.exists(resolved_path)
+            
+            if os.path.exists(resolved_path):
+                # List files in directory
+                try:
+                    files = os.listdir(resolved_path)
+                    debug_info['files'] = files
+                    
+                    # Check for specific files
+                    metadata_path = os.path.join(resolved_path, 'metadata.json')
+                    seo_report_path = os.path.join(resolved_path, 'seo_report.txt')
+                    
+                    debug_info['metadata_exists'] = os.path.exists(metadata_path)
+                    debug_info['seo_report_exists'] = os.path.exists(seo_report_path)
+                    
+                except Exception as e:
+                    debug_info['list_error'] = str(e)
+        
+        return jsonify({
+            'success': True,
+            'data': debug_info
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error in debug endpoint: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/gambix/projects/<project_id>/rescraper', methods=['POST'])
+@require_auth
+def rescrape_project(project_id):
+    """Re-scrape a project if files are missing"""
+    try:
+        db = GambixStrataDatabase()
+        
+        # Get project to verify ownership
+        project = db.get_project(project_id)
+        if not project:
+            return jsonify({'success': False, 'error': 'Project not found'}), 404
+        
+        # Verify project belongs to current user
+        email = request.current_user['email']
+        user_data = db.get_user_by_email(email)
+        if not user_data or project['user_id'] != user_data['user_id']:
+            return jsonify({'success': False, 'error': 'Access denied'}), 403
+        
+        domain = project['domain']
+        
+        # Ensure domain has a protocol
+        if not domain.startswith(('http://', 'https://')):
+            domain_with_protocol = f"https://{domain}"
+        else:
+            domain_with_protocol = domain
+        
+        # Call the scraper function
+        scraped_data = simple_web_scraper(domain_with_protocol)
+        
+        if scraped_data:
+            # Try to save to S3 first, fallback to local storage
+            saved_location = None
+            storage_type = None
+            
+            try:
+                # Attempt S3 storage
+                saved_location = save_content_to_s3(scraped_data, domain)
+                if saved_location:
+                    storage_type = 's3'
+                    app.logger.info(f"✅ Content saved to S3: {saved_location}")
+                else:
+                    # Fallback to local storage
+                    saved_location = save_content_to_files(scraped_data, domain)
+                    storage_type = 'local'
+                    app.logger.info(f"✅ Content saved locally: {saved_location}")
+            except Exception as s3_error:
+                app.logger.warning(f"⚠️ S3 storage failed, falling back to local storage: {s3_error}")
+                saved_location = save_content_to_files(scraped_data, domain)
+                storage_type = 'local'
+                app.logger.info(f"✅ Content saved locally: {saved_location}")
+            
+            if saved_location:
+                # Store the file path and storage type in the database
+                db.update_project_scraped_files(project_id, saved_location)
+                
+                # Update last_crawl timestamp
+                db.update_project_last_crawl(project_id)
+                
+                app.logger.info(f"Successfully re-scraped {domain} for project {project_id}, files saved to {storage_type}: {saved_location}")
+                
+                return jsonify({
+                    'success': True,
+                    'message': f'Project re-scraped successfully. Files saved to {storage_type}.',
+                    'saved_location': saved_location,
+                    'storage_type': storage_type
+                })
+            else:
+                app.logger.warning(f"Failed to save scraped files for {domain}")
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to save scraped files'
+                }), 500
+        else:
+            app.logger.warning(f"Failed to scrape {domain} for project {project_id}")
+            return jsonify({
+                'success': False,
+                'error': 'Failed to scrape the website'
+            }), 500
+            
+    except Exception as e:
+        app.logger.error(f"Error re-scraping project: {e}")
+        return jsonify({'success': False, 'error': 'Failed to re-scrape project'}), 500
 
 # Serve static files (HTML, CSS, JS) - Must be at the end
 @app.route('/', defaults={'path': ''})
