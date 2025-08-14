@@ -1042,44 +1042,5 @@ class DynamoDBDatabase:
             logger.error(f"Error getting dashboard data: {e}")
             return {}
     
-    # Migration helper
-    def migrate_from_sqlite(self, sqlite_db_path: str):
-        """Migrate data from SQLite database"""
-        import sqlite3
-        
-        try:
-            sqlite_conn = sqlite3.connect(sqlite_db_path)
-            sqlite_conn.row_factory = sqlite3.Row
-            
-            # Migrate users
-            cursor = sqlite_conn.execute("SELECT * FROM users")
-            for row in cursor.fetchall():
-                user_data = dict(row)
-                if 'password_hash' in user_data and user_data['password_hash']:
-                    # User already exists, skip
-                    continue
-                
-                self.create_user(
-                    email=user_data['email'],
-                    name=user_data['name'],
-                    role=user_data.get('role', 'user'),
-                    preferences=self._deserialize_json(user_data.get('preferences'))
-                )
-            
-            # Migrate projects
-            cursor = sqlite_conn.execute("SELECT * FROM projects")
-            for row in cursor.fetchall():
-                project_data = dict(row)
-                self.create_project(
-                    user_id=project_data['user_id'],
-                    domain=project_data['domain'],
-                    name=project_data['name'],
-                    settings=self._deserialize_json(project_data.get('settings'))
-                )
-            
-            sqlite_conn.close()
-            logger.info("Migration from SQLite completed successfully")
-            
-        except Exception as e:
-            logger.error(f"Error during migration: {e}")
-            raise
+    # Migration helper (removed - DynamoDB only)
+    pass

@@ -42,11 +42,7 @@ class TestDatabaseOperations(unittest.TestCase):
         try:
             user = self.db.get_user_by_email(self.test_email)
             if user:
-                if USE_DYNAMODB:
-                    self.db.users_table.delete_item(Key={'user_id': user['user_id']})
-                else:
-                    # For SQLite, we can't easily delete, but that's okay for tests
-                    pass
+                self.db.users_table.delete_item(Key={'user_id': user['user_id']})
         except Exception:
             pass
     

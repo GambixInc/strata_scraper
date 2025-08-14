@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
-import sqlite3
+# DynamoDB only - no SQLite imports needed
 from main import simple_web_scraper, save_content_to_s3, get_safe_filename
 from database_config import GambixStrataDatabase, add_scraped_site, add_optimized_site, get_site_stats, export_summary, get_sites_by_user_email, get_all_sites, USE_DYNAMODB
 import json
@@ -107,22 +107,8 @@ def initialize_database():
     try:
         db = GambixStrataDatabase()
         
-        # For DynamoDB, tables are created automatically if they don't exist
-        # For SQLite, we can check if tables exist
-        if not USE_DYNAMODB:
-            # SQLite - check if tables exist by trying to query them
-            try:
-                # Try to get a count of users (this will fail if table doesn't exist)
-                with sqlite3.connect(db.db_path) as conn:
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT COUNT(*) FROM users")
-                    user_count = cursor.fetchone()[0]
-                    app.logger.info(f"Database initialized - {user_count} users found")
-            except sqlite3.OperationalError:
-                app.logger.warning("Database tables may not exist. Run migration scripts if needed.")
-        else:
-            # DynamoDB - tables are created automatically
-            app.logger.info("DynamoDB tables will be created automatically if they don't exist")
+        # DynamoDB tables are created automatically if they don't exist
+        app.logger.info("DynamoDB tables will be created automatically if they don't exist")
             
     except Exception as e:
         app.logger.error(f"Error initializing database: {e}")
@@ -1525,9 +1511,9 @@ if __name__ == '__main__':
     print(f"   - Recommendations: http://localhost:{PORT}/api/gambix/projects/<id>/recommendations")
     print(f"   - Alerts: http://localhost:{PORT}/api/gambix/alerts")
     print(f"   - Dashboard: http://localhost:{PORT}/api/gambix/dashboard/<user_id>")
-    print(f"\n📂 Files will be saved to:")
-    print("   - S3 bucket: gambix-strata-production")
-    print("   - DynamoDB tables: gambix_strata_*")
+    print(f"\n📂 Storage Configuration:")
+    print("   - Database: DynamoDB (gambix_strata_* tables)")
+    print("   - Storage: S3 bucket (gambix-strata-production)")
     print("\nPress Ctrl+C to stop the server")
     
     app.run(debug=DEBUG, host=HOST, port=PORT) 
