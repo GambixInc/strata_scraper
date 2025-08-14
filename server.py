@@ -101,36 +101,83 @@ if not app.debug:
     app.logger.setLevel(logging.INFO)
     app.logger.info('Web Scraper startup')
 
+# Initialize database tables on startup
+def initialize_database():
+    """Initialize database tables and ensure they exist"""
+    try:
+        db = GambixStrataDatabase()
+        
+        # For DynamoDB, tables are created automatically if they don't exist
+        # For SQLite, we can check if tables exist
+        if not USE_DYNAMODB:
+            # SQLite - check if tables exist by trying to query them
+            try:
+                # Try to get a count of users (this will fail if table doesn't exist)
+                with sqlite3.connect(db.db_path) as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT COUNT(*) FROM users")
+                    user_count = cursor.fetchone()[0]
+                    app.logger.info(f"Database initialized - {user_count} users found")
+            except sqlite3.OperationalError:
+                app.logger.warning("Database tables may not exist. Run migration scripts if needed.")
+        else:
+            # DynamoDB - tables are created automatically
+            app.logger.info("DynamoDB tables will be created automatically if they don't exist")
+            
+    except Exception as e:
+        app.logger.error(f"Error initializing database: {e}")
+
+# Initialize database on startup
+initialize_database()
+
+def ensure_user_exists(email, request_user_data):
+    """
+    Helper function to ensure a user exists in the database.
+    Creates the user if they don't exist.
+    
+    Args:
+        email (str): User's email address
+        request_user_data (dict): User data from request.current_user
+        
+    Returns:
+        dict: User data from database
+    """
+    db = GambixStrataDatabase()
+    
+    # Try to get user from database first
+    user_data = db.get_user_by_email(email)
+    
+    if not user_data:
+        # Create user in database if they don't exist
+        cognito_user_id = request_user_data.get('cognito_user_id')
+        user_name = request_user_data.get('name') or email
+        given_name = request_user_data.get('given_name')
+        family_name = request_user_data.get('family_name')
+        
+        user_id = db.create_user(
+            email=email,
+            name=user_name,
+            cognito_user_id=cognito_user_id,
+            given_name=given_name,
+            family_name=family_name
+        )
+        
+        # Get the newly created user data
+        user_data = db.get_user_by_email(email)
+        app.logger.info(f"Created new user: {email} with ID: {user_id}")
+    
+    return user_data
+
 # User Profile Endpoints (for AWS Cognito authenticated users)
 @app.route('/api/user/profile', methods=['GET'])
 @require_auth
 def get_user_profile():
     """Get current user profile"""
     try:
-        cognito_user_id = request.current_user['cognito_user_id']
         email = request.current_user['email']
         
-        db = GambixStrataDatabase()
-        
-        # Try to get user from database first
-        user_data = db.get_user_by_email(email)
-        
-        if not user_data:
-            # Create user in database if they don't exist
-            # Extract user information from Cognito token
-            cognito_user_id = request.current_user.get('cognito_user_id')
-            user_name = request.current_user.get('name') or email
-            given_name = request.current_user.get('given_name')
-            family_name = request.current_user.get('family_name')
-            
-            user_id = db.create_user(
-                email=email,
-                name=user_name,
-                cognito_user_id=cognito_user_id,
-                given_name=given_name,
-                family_name=family_name
-            )
-            user_data = db.get_user_by_email(email)
+        # Ensure user exists in database
+        user_data = ensure_user_exists(email, request.current_user)
         
         if user_data:
             user_data.pop('password_hash', None)  # Remove password hash
@@ -791,26 +838,9 @@ def create_project():
         if not domain:
             return jsonify({'success': False, 'error': 'Website URL is required'}), 400
         
-        db = GambixStrataDatabase()
-        
-        # Get or create user in database
-        user_data = db.get_user_by_email(email)
-        if not user_data:
-            # Create user with Cognito information
-            cognito_user_id = request.current_user.get('cognito_user_id')
-            user_name = request.current_user.get('name') or email
-            given_name = request.current_user.get('given_name')
-            family_name = request.current_user.get('family_name')
-            
-            user_id = db.create_user(
-                email=email,
-                name=user_name,
-                cognito_user_id=cognito_user_id,
-                given_name=given_name,
-                family_name=family_name
-            )
-        else:
-            user_id = user_data['user_id']
+        # Ensure user exists in database
+        user_data = ensure_user_exists(email, request.current_user)
+        user_id = user_data['user_id']
         
         project_id = db.create_project(user_id, domain, name, settings)
         
@@ -879,15 +909,9 @@ def get_user_projects():
     """Get all projects for current user"""
     try:
         email = request.current_user['email']
-        db = GambixStrataDatabase()
         
-        # Get user from database
-        user_data = db.get_user_by_email(email)
-        if not user_data:
-            return jsonify({
-                'success': True,
-                'data': []  # Return empty list for new users
-            })
+        # Ensure user exists in database
+        user_data = ensure_user_exists(email, request.current_user)
         
         projects = db.get_user_projects(user_data['user_id'])
         
@@ -939,12 +963,9 @@ def delete_project(project_id):
     """Delete a project by ID"""
     try:
         email = request.current_user['email']
-        db = GambixStrataDatabase()
         
-        # Get user from database
-        user_data = db.get_user_by_email(email)
-        if not user_data:
-            return jsonify({'success': False, 'error': 'User not found'}), 404
+        # Ensure user exists in database
+        user_data = ensure_user_exists(email, request.current_user)
         
         # Get the project to verify ownership
         project = db.get_project(project_id)
@@ -1023,8 +1044,8 @@ def get_project_scraped_data(project_id):
         
         # Verify project belongs to current user
         email = request.current_user['email']
-        user_data = db.get_user_by_email(email)
-        if not user_data or project['user_id'] != user_data['user_id']:
+        user_data = ensure_user_exists(email, request.current_user)
+        if project['user_id'] != user_data['user_id']:
             return jsonify({'success': False, 'error': 'Access denied'}), 403
         
         # Check if project has scraped files
@@ -1360,8 +1381,8 @@ def debug_project_files(project_id):
         
         # Verify project belongs to current user
         email = request.current_user['email']
-        user_data = db.get_user_by_email(email)
-        if not user_data or project['user_id'] != user_data['user_id']:
+        user_data = ensure_user_exists(email, request.current_user)
+        if project['user_id'] != user_data['user_id']:
             return jsonify({'success': False, 'error': 'Access denied'}), 403
         
         scraped_files_path = project.get('scraped_files_path')
@@ -1428,8 +1449,8 @@ def rescrape_project(project_id):
         
         # Verify project belongs to current user
         email = request.current_user['email']
-        user_data = db.get_user_by_email(email)
-        if not user_data or project['user_id'] != user_data['user_id']:
+        user_data = ensure_user_exists(email, request.current_user)
+        if project['user_id'] != user_data['user_id']:
             return jsonify({'success': False, 'error': 'Access denied'}), 403
         
         domain = project['domain']
