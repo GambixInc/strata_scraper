@@ -10,7 +10,7 @@ import os
 USE_DYNAMODB = os.getenv('USE_DYNAMODB', 'false').lower() == 'true'
 
 if USE_DYNAMODB:
-    from dynamodb_database import DynamoDBDatabase as Database
+    from dynamodb_database import DynamoDBDatabase
     from dynamodb_database import (
         add_scraped_site, 
         add_optimized_site, 
@@ -20,8 +20,10 @@ if USE_DYNAMODB:
         get_all_sites,
         GambixStrataDatabase
     )
+    # Use DynamoDBDatabase as the main Database class
+    Database = DynamoDBDatabase
 else:
-    from database import Database, GambixStrataDatabase
+    from database import GambixStrataDatabase
     from database import (
         add_scraped_site, 
         add_optimized_site, 
@@ -30,6 +32,8 @@ else:
         get_sites_by_user_email, 
         get_all_sites
     )
+    # Use GambixStrataDatabase as the main Database class
+    Database = GambixStrataDatabase
 
 # Export the database class and functions
 __all__ = [
