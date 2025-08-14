@@ -197,19 +197,14 @@ def get_user_profile():
 def update_user_profile():
     """Update current user profile"""
     try:
-        cognito_user_id = request.current_user['cognito_user_id']
         email = request.current_user['email']
         data = request.get_json()
         
         if not data:
             return jsonify({'success': False, 'error': 'No JSON data provided'}), 400
         
-        db = GambixStrataDatabase()
-        
-        # Get user from database
-        user_data = db.get_user_by_email(email)
-        if not user_data:
-            return jsonify({'success': False, 'error': 'User not found'}), 404
+        # Ensure user exists in database
+        user_data = ensure_user_exists(email, request.current_user)
         
         success = db.update_user_profile(user_data['user_id'], data)
         
@@ -1325,22 +1320,9 @@ def get_dashboard_data():
     """Get dashboard data for current user"""
     try:
         email = request.current_user['email']
-        db = GambixStrataDatabase()
         
-        # Get user from database
-        user_data = db.get_user_by_email(email)
-        if not user_data:
-            # Return empty dashboard for new users
-            return jsonify({
-                'success': True,
-                'data': {
-                    'total_projects': 0,
-                    'active_projects': 0,
-                    'total_health_score': 0,
-                    'recent_activity': [],
-                    'alerts': []
-                }
-            })
+        # Ensure user exists in database
+        user_data = ensure_user_exists(email, request.current_user)
         
         dashboard_data = db.get_dashboard_data(user_data['user_id'])
         

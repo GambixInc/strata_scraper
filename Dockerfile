@@ -36,6 +36,10 @@ RUN mkdir -p logs strata_design
 # Create a simple frontend if it doesn't exist
 RUN echo '<!DOCTYPE html><html><head><title>Strata Scraper</title></head><body><h1>Strata Scraper API</h1><p>Use /api/scrape endpoint to scrape websites</p></body></html>' > strata_design/scraper_frontend.html
 
+# Run tests during build - this will fail the build if tests don't pass
+RUN echo "🧪 Running comprehensive test suite during Docker build..." && \
+    python tests/test_suite.py
+
 # Expose port
 EXPOSE 8080
 
