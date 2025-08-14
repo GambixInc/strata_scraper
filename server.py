@@ -108,7 +108,8 @@ def initialize_database():
         # Check AWS credentials before initializing database
         try:
             import boto3
-            sts = boto3.client('sts')
+            region = os.getenv('AWS_REGION', 'us-east-1')
+            sts = boto3.client('sts', region_name=region)
             sts.get_caller_identity()
             app.logger.info("✅ AWS credentials verified")
         except Exception as e:

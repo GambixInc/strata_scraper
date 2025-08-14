@@ -11,6 +11,9 @@ export DEBUG=false
 export PORT=8080
 export HOST=0.0.0.0
 
+# Ensure AWS region is set for all AWS services
+echo "🔧 Setting AWS region: $AWS_REGION"
+
 echo "🔧 Configuration:"
 echo "   - Database: DynamoDB only"
 echo "   - Storage: S3 (gambix-strata-production)"

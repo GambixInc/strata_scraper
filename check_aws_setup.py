@@ -36,7 +36,11 @@ def check_dynamodb_access():
     print("\n🔍 Checking DynamoDB access...")
     
     try:
-        dynamodb = boto3.resource('dynamodb')
+        # Get region from environment or use default
+        region = os.getenv('AWS_REGION', 'us-east-1')
+        print(f"   Using AWS region: {region}")
+        
+        dynamodb = boto3.resource('dynamodb', region_name=region)
         # Try to list tables to verify access
         tables = list(dynamodb.tables.all())
         print(f"✅ DynamoDB access verified ({len(tables)} tables found)")
@@ -50,9 +54,10 @@ def check_s3_access():
     print("\n🔍 Checking S3 access...")
     
     bucket_name = os.getenv('S3_BUCKET_NAME', 'gambix-strata-production')
+    region = os.getenv('AWS_REGION', 'us-east-1')
     
     try:
-        s3 = boto3.client('s3')
+        s3 = boto3.client('s3', region_name=region)
         s3.head_bucket(Bucket=bucket_name)
         print(f"✅ S3 bucket access verified: {bucket_name}")
         return True
