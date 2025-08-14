@@ -431,7 +431,8 @@ class DynamoDBDatabase:
         return datetime.utcnow().isoformat()
     
     # User operations
-    def create_user(self, email: str, name: str, password: str = None, role: str = 'user', preferences: Dict = None) -> str:
+    def create_user(self, email: str, name: str, password: str = None, role: str = 'user', preferences: Dict = None, 
+                   cognito_user_id: str = None, given_name: str = None, family_name: str = None) -> str:
         """Create a new user"""
         user_id = self._generate_id()
         
@@ -444,6 +445,14 @@ class DynamoDBDatabase:
             'updated_at': self._get_timestamp(),
             'is_active': True
         }
+        
+        # Add Cognito-specific fields if provided
+        if cognito_user_id:
+            item['cognito_user_id'] = cognito_user_id
+        if given_name:
+            item['given_name'] = given_name
+        if family_name:
+            item['family_name'] = family_name
         
         if password:
             password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())

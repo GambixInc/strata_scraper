@@ -796,9 +796,19 @@ def create_project():
         # Get or create user in database
         user_data = db.get_user_by_email(email)
         if not user_data:
-            # Ensure we have a valid name (fallback to email if name is empty)
+            # Create user with Cognito information
+            cognito_user_id = request.current_user.get('cognito_user_id')
             user_name = request.current_user.get('name') or email
-            user_id = db.create_user(email, user_name)
+            given_name = request.current_user.get('given_name')
+            family_name = request.current_user.get('family_name')
+            
+            user_id = db.create_user(
+                email=email,
+                name=user_name,
+                cognito_user_id=cognito_user_id,
+                given_name=given_name,
+                family_name=family_name
+            )
         else:
             user_id = user_data['user_id']
         
