@@ -209,6 +209,8 @@ def update_user_profile():
         # Ensure user exists in database
         user_data = ensure_user_exists(email, request.current_user)
         
+        # Create database instance
+        db = GambixStrataDatabase()
         success = db.update_user_profile(user_data['user_id'], data)
         
         if success:
@@ -840,6 +842,8 @@ def create_project():
         user_data = ensure_user_exists(email, request.current_user)
         user_id = user_data['user_id']
         
+        # Create database instance
+        db = GambixStrataDatabase()
         project_id = db.create_project(user_id, domain, name, settings)
         
         # Automatically scrape the website after creating the project
@@ -911,6 +915,8 @@ def get_user_projects():
         # Ensure user exists in database
         user_data = ensure_user_exists(email, request.current_user)
         
+        # Create database instance
+        db = GambixStrataDatabase()
         projects = db.get_user_projects(user_data['user_id'])
         
         # Transform projects to match frontend expectations
@@ -965,6 +971,8 @@ def delete_project(project_id):
         # Ensure user exists in database
         user_data = ensure_user_exists(email, request.current_user)
         
+        # Create database instance
+        db = GambixStrataDatabase()
         # Get the project to verify ownership
         project = db.get_project(project_id)
         if not project:
@@ -1327,6 +1335,8 @@ def get_dashboard_data():
         # Ensure user exists in database
         user_data = ensure_user_exists(email, request.current_user)
         
+        # Create database instance
+        db = GambixStrataDatabase()
         dashboard_data = db.get_dashboard_data(user_data['user_id'])
         
         return jsonify({
