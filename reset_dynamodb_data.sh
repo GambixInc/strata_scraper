@@ -7,7 +7,7 @@ echo "🗑️  Resetting DynamoDB data for Gambix Strata"
 echo ""
 
 # Configuration
-TABLE_PREFIX="${DYNAMODB_TABLE_PREFIX:-gambix_strata_prod}"
+TABLE_PREFIX="${DYNAMODB_TABLE_PREFIX:-gambix_strata_}"
 REGION="${AWS_REGION:-us-east-1}"
 
 echo "📋 Configuration:"
@@ -32,6 +32,9 @@ TABLES=$(aws dynamodb list-tables --region $REGION --query "TableNames[?starts_w
 
 if [ -z "$TABLES" ]; then
     echo "❌ No tables found with prefix: $TABLE_PREFIX"
+    echo ""
+    echo "Available tables:"
+    aws dynamodb list-tables --region $REGION --query "TableNames[?contains(@, 'gambix_strata')]" --output table
     exit 1
 fi
 
