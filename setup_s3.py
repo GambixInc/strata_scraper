@@ -154,7 +154,7 @@ def main():
     if test_configuration():
         print("\n🎉 S3 setup completed successfully!")
         print("\nYour scraped content will now be saved to S3.")
-        print("If S3 is unavailable, the app will automatically fall back to local storage.")
+        print("Note: This application requires S3 for storage - no local fallback available.")
         return True
     else:
         print("\n⚠️ S3 setup completed with issues.")

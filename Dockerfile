@@ -30,7 +30,7 @@ RUN echo '<!DOCTYPE html><html><head><title>Strata Scraper</title></head><body><
 
 # Run tests during build - this will fail the build if tests don't pass
 RUN echo "🧪 Running comprehensive test suite during Docker build..." && \
-    TEST_ENV=docker USE_DYNAMODB=true python tests/test_suite.py
+    TEST_ENV=docker python tests/test_suite.py
 
 # Expose port
 EXPOSE 8080

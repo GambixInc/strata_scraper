@@ -4,7 +4,6 @@ echo "🚀 Starting Gambix Strata (DynamoDB Only)"
 echo "========================================"
 
 # Set environment variables for DynamoDB
-export USE_DYNAMODB=true
 export AWS_REGION=us-east-1
 export S3_BUCKET_NAME=gambix-strata-production
 export DYNAMODB_TABLE_PREFIX=gambix_strata_

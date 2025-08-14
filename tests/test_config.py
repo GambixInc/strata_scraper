@@ -38,8 +38,7 @@ def setup_test_environment():
     """Set up test environment variables"""
     config = get_test_config()
     
-    # Set database configuration (always DynamoDB)
-    os.environ['USE_DYNAMODB'] = 'true'
+    # Set database configuration (DynamoDB only)
     os.environ['AWS_REGION'] = config['database']['aws_region']
     os.environ['DYNAMODB_TABLE_PREFIX'] = config['database']['table_prefix']
     

@@ -11,8 +11,8 @@ try:
     print("   ✅ Main imports OK")
     
     # Test database imports
-    from database_config import Database, GambixStrataDatabase, USE_DYNAMODB
-    print(f"   ✅ Database imports OK (USE_DYNAMODB: {USE_DYNAMODB})")
+    from database_config import Database, GambixStrataDatabase
+print(f"   ✅ Database imports OK (DynamoDB only)")
     
     # Test S3 storage imports
     try:

@@ -1160,15 +1160,8 @@ if __name__ == "__main__":
             saved_location = None
         
         if saved_location:
-            # Save to database
-            try:
-                from database_config import add_scraped_site
-                if add_scraped_site(target_url, scraped_data, saved_location):
-                    print("✅ Data saved to database")
-                else:
-                    print("❌ Failed to save to database")
-            except ImportError:
-                print("⚠️ Database module not available, skipping database save")
+            # Database operations are handled by the Flask API server
+            print("📊 Data ready for database storage via API")
             
             # Save analysis results to S3
             try:

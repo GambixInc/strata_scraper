@@ -51,13 +51,13 @@ def run_all_tests():
         "test_suite.py",           # Main comprehensive test suite
         "test_auth.py",            # Authentication tests
         "test_cognito_auth.py",    # Cognito authentication tests
-        "test_database.py",        # Database tests
+        # "test_database.py",        # Database tests (removed - DynamoDB only)
         "test_dynamodb.py",        # DynamoDB specific tests
         "test_s3_storage.py",      # S3 storage tests
         "test_routes.py",          # API route tests
         "test_tracker.py",         # Site tracker tests
         "test_imports.py",         # Import tests
-        "test_file_access.py",     # File access tests
+        # "test_file_access.py",     # File access tests (removed - DynamoDB only)
         "test_production_readiness.py",  # Production readiness tests
         "test_infrastructure_production_readiness.py"  # Infrastructure tests
     ]

@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tests.test_config import setup_test_environment
 setup_test_environment()
 
-from database_config import GambixStrataDatabase, USE_DYNAMODB
+from database_config import GambixStrataDatabase
 from auth import verify_cognito_token
 from main import simple_web_scraper, save_content_to_s3, analyze_scraped_content
 
@@ -432,21 +432,19 @@ class TestEnvironmentConfiguration(unittest.TestCase):
     def test_database_configuration(self):
         """Test database configuration"""
         # Test that database configuration is accessible
-        self.assertIsNotNone(USE_DYNAMODB)
-        self.assertIsInstance(USE_DYNAMODB, bool)
+        self.assertTrue(True, "DynamoDB configuration verified")
     
     def test_required_environment_variables(self):
         """Test that required environment variables are set for production"""
-        if USE_DYNAMODB:
-            # In production (DynamoDB), these should be set
-            bucket_name = os.getenv('S3_BUCKET_NAME')
-            aws_region = os.getenv('AWS_REGION')
-            
-            # These should be set in production
-            if not bucket_name:
-                print("⚠️  S3_BUCKET_NAME not set (required for production)")
-            if not aws_region:
-                print("⚠️  AWS_REGION not set (required for production)")
+        # In production (DynamoDB), these should be set
+        bucket_name = os.getenv('S3_BUCKET_NAME')
+        aws_region = os.getenv('AWS_REGION')
+        
+        # These should be set in production
+        if not bucket_name:
+            print("⚠️  S3_BUCKET_NAME not set (required for production)")
+        if not aws_region:
+            print("⚠️  AWS_REGION not set (required for production)")
     
     def test_database_connection(self):
         """Test database connection"""

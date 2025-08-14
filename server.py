@@ -3,7 +3,7 @@ from flask_cors import CORS
 import os
 # DynamoDB only - no SQLite imports needed
 from main import simple_web_scraper, save_content_to_s3, get_safe_filename
-from database_config import GambixStrataDatabase, add_scraped_site, add_optimized_site, get_site_stats, export_summary, get_sites_by_user_email, get_all_sites, USE_DYNAMODB
+from database_config import GambixStrataDatabase
 import json
 from datetime import datetime
 from flask_limiter import Limiter
@@ -105,6 +105,21 @@ if not app.debug:
 def initialize_database():
     """Initialize database tables and ensure they exist"""
     try:
+        # Check AWS credentials before initializing database
+        try:
+            import boto3
+            sts = boto3.client('sts')
+            sts.get_caller_identity()
+            app.logger.info("✅ AWS credentials verified")
+        except Exception as e:
+            app.logger.error(f"❌ AWS credentials not available: {e}")
+            app.logger.error("This application requires AWS credentials for DynamoDB and S3")
+            app.logger.error("Please configure AWS CLI or set environment variables:")
+            app.logger.error("  - AWS_ACCESS_KEY_ID")
+            app.logger.error("  - AWS_SECRET_ACCESS_KEY")
+            app.logger.error("  - AWS_REGION")
+            raise Exception("AWS credentials required but not available")
+        
         db = GambixStrataDatabase()
         
         # DynamoDB tables are created automatically if they don't exist
@@ -112,6 +127,7 @@ def initialize_database():
             
     except Exception as e:
         app.logger.error(f"Error initializing database: {e}")
+        raise
 
 # Initialize database on startup
 initialize_database()
