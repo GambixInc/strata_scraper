@@ -17,32 +17,40 @@ def verify_cognito_token(token: str) -> Optional[Dict[str, Any]]:
         payload = jwt.decode(token, options={"verify_signature": False})
         
         # Extract user information from Cognito token
-        # Cognito tokens can have different field names depending on the token type
-        user_id = payload.get('sub') or payload.get('user_id')
+        # Cognito UUID (for linking to Cognito)
+        cognito_user_id = payload.get('sub')
         
-        # Try different possible email field names
-        email = (payload.get('email') or 
-                payload.get('cognito:username') or 
-                payload.get('username') or
-                payload.get('preferred_username'))
+        # Extract real user information
+        email = payload.get('email')
         
-        # Try different possible name field names
-        name = (payload.get('name') or 
-               payload.get('given_name') or 
-               payload.get('cognito:username') or
-               email)  # Fallback to email if no name
+        # Extract name information
+        given_name = payload.get('given_name', '')
+        family_name = payload.get('family_name', '')
+        
+        # Construct full name
+        if given_name and family_name:
+            full_name = f"{given_name} {family_name}"
+        elif given_name:
+            full_name = given_name
+        elif family_name:
+            full_name = family_name
+        else:
+            # Fallback to email if no name is provided
+            full_name = email or "Unknown User"
         
         # Ensure we have required fields
-        if not user_id:
+        if not cognito_user_id:
             return None
             
         if not email:
             return None
         
         user_data = {
-            'user_id': user_id,
-            'email': email,
-            'name': name,
+            'cognito_user_id': cognito_user_id,  # Store Cognito UUID separately
+            'email': email,                      # Real email address
+            'name': full_name,                   # Real full name
+            'given_name': given_name,            # First name
+            'family_name': family_name,          # Last name
             'role': 'user'  # Default role
         }
         

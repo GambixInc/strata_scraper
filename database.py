@@ -33,8 +33,11 @@ class GambixStrataDatabase:
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS users (
                     user_id TEXT PRIMARY KEY,
+                    cognito_user_id TEXT UNIQUE, -- AWS Cognito UUID
                     email TEXT UNIQUE NOT NULL,
                     name TEXT NOT NULL,
+                    given_name TEXT,
+                    family_name TEXT,
                     password_hash TEXT,
                     role TEXT CHECK(role IN ('admin', 'user', 'viewer')) NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -158,6 +161,9 @@ class GambixStrataDatabase:
             # Add missing columns to existing tables
             self._migrate_schema(cursor)
             
+            # Migrate user data to new schema
+            self._migrate_user_data(cursor)
+            
             conn.commit()
     
     def _create_indexes(self, cursor):
@@ -266,6 +272,48 @@ class GambixStrataDatabase:
         except Exception as e:
             print(f"Migration error: {e}")
     
+    def _migrate_user_data(self, cursor):
+        """Migrate existing user data to new schema with real user information"""
+        try:
+            # Check if new columns exist
+            cursor.execute("PRAGMA table_info(users)")
+            columns = [column[1] for column in cursor.fetchall()]
+            
+            # If new columns don't exist, add them
+            if 'cognito_user_id' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN cognito_user_id TEXT UNIQUE")
+                print("Added cognito_user_id column to users table")
+            
+            if 'given_name' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN given_name TEXT")
+                print("Added given_name column to users table")
+            
+            if 'family_name' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN family_name TEXT")
+                print("Added family_name column to users table")
+            
+            # Check for users with UUID-like emails (likely Cognito UUIDs)
+            cursor.execute("""
+                SELECT user_id, email, name 
+                FROM users 
+                WHERE email LIKE '%-%-%-%-%' 
+                AND email NOT LIKE '%@%'
+            """)
+            cognito_users = cursor.fetchall()
+            
+            if cognito_users:
+                print(f"Found {len(cognito_users)} users with Cognito UUIDs as emails")
+                print("These users will need to be updated with real information from Cognito tokens")
+                
+                for user_id, email, name in cognito_users:
+                    print(f"  User ID: {user_id}")
+                    print(f"  Current email (Cognito UUID): {email}")
+                    print(f"  Current name: {name}")
+                    print("  → This user needs to be updated with real email/name from Cognito")
+            
+        except Exception as e:
+            print(f"User data migration error: {e}")
+    
     def _generate_id(self) -> str:
         """Generate a UUID for primary keys"""
         return str(uuid.uuid4())
@@ -286,7 +334,9 @@ class GambixStrataDatabase:
             return None
     
     # User Management
-    def create_user(self, email: str, name: str, password: str = None, role: str = 'user', preferences: Dict = None) -> str:
+    def create_user(self, email: str, name: str, password: str = None, role: str = 'user', 
+                   cognito_user_id: str = None, given_name: str = None, family_name: str = None, 
+                   preferences: Dict = None) -> str:
         """Create a new user"""
         user_id = self._generate_id()
         password_hash = None
@@ -296,9 +346,11 @@ class GambixStrataDatabase:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO users (user_id, email, name, password_hash, role, preferences)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (user_id, email, name, password_hash, role, self._serialize_json(preferences)))
+                INSERT INTO users (user_id, cognito_user_id, email, name, given_name, family_name, 
+                                 password_hash, role, preferences)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (user_id, cognito_user_id, email, name, given_name, family_name, 
+                  password_hash, role, self._serialize_json(preferences)))
             conn.commit()
         return user_id
     

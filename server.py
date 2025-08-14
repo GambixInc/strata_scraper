@@ -107,7 +107,7 @@ if not app.debug:
 def get_user_profile():
     """Get current user profile"""
     try:
-        user_id = request.current_user['user_id']
+        cognito_user_id = request.current_user['cognito_user_id']
         email = request.current_user['email']
         
         db = GambixStrataDatabase()
@@ -117,9 +117,19 @@ def get_user_profile():
         
         if not user_data:
             # Create user in database if they don't exist
-            # Ensure we have a valid name (fallback to email if name is empty)
+            # Extract user information from Cognito token
+            cognito_user_id = request.current_user.get('cognito_user_id')
             user_name = request.current_user.get('name') or email
-            user_id = db.create_user(email, user_name)
+            given_name = request.current_user.get('given_name')
+            family_name = request.current_user.get('family_name')
+            
+            user_id = db.create_user(
+                email=email,
+                name=user_name,
+                cognito_user_id=cognito_user_id,
+                given_name=given_name,
+                family_name=family_name
+            )
             user_data = db.get_user_by_email(email)
         
         if user_data:
@@ -140,7 +150,7 @@ def get_user_profile():
 def update_user_profile():
     """Update current user profile"""
     try:
-        user_id = request.current_user['user_id']
+        cognito_user_id = request.current_user['cognito_user_id']
         email = request.current_user['email']
         data = request.get_json()
         
