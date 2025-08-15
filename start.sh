@@ -7,7 +7,7 @@ echo "========================================"
 export AWS_REGION=us-east-1
 export S3_BUCKET_NAME=gambix-strata-production
 export DYNAMODB_TABLE_PREFIX=gambix_strata_
-export DEBUG=true
+export DEBUG=False
 export PORT=8080
 export HOST=0.0.0.0
 
