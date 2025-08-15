@@ -864,6 +864,43 @@ def get_user_by_email(email):
         app.logger.error(f"Error getting user: {e}")
         return jsonify({'success': False, 'error': 'Failed to get user'}), 500
 
+@app.route('/api/gambix/users/<email>/duplicates', methods=['GET'])
+def get_duplicate_users(email):
+    """Get all users with the same email (for finding duplicates)"""
+    try:
+        global db
+        users = db.get_all_users_by_email(email)
+        
+        if not users:
+            return jsonify({'success': False, 'error': 'No users found with this email'}), 404
+        
+        return jsonify({
+            'success': True,
+            'users': users,
+            'count': len(users)
+        })
+    except Exception as e:
+        app.logger.error(f"Error getting duplicate users: {e}")
+        return jsonify({'success': False, 'error': 'Failed to get duplicate users'}), 500
+
+@app.route('/api/gambix/users/<user_id>', methods=['DELETE'])
+def delete_user(user_id):
+    """Delete a user by ID (for cleaning up duplicates)"""
+    try:
+        global db
+        success = db.delete_user(user_id)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'User {user_id} deleted successfully'
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Failed to delete user'}), 500
+    except Exception as e:
+        app.logger.error(f"Error deleting user: {e}")
+        return jsonify({'success': False, 'error': 'Failed to delete user'}), 500
+
 @app.route('/api/projects', methods=['POST'])
 @require_auth
 # @limiter.limit("10 per minute")  # Temporarily disabled

@@ -463,6 +463,12 @@ class DynamoDBDatabase:
     def create_user(self, email: str, name: str, password: str = None, role: str = 'user', preferences: Dict = None, 
                    cognito_user_id: str = None, given_name: str = None, family_name: str = None) -> str:
         """Create a new user"""
+        # Check if user already exists by email
+        existing_user = self.get_user_by_email(email)
+        if existing_user:
+            logger.warning(f"User with email {email} already exists with ID: {existing_user['user_id']}")
+            return existing_user['user_id']
+        
         user_id = self._generate_id()
         
         item = {
@@ -492,6 +498,7 @@ class DynamoDBDatabase:
         
         try:
             self.users_table.put_item(Item=item)
+            logger.info(f"Created new user: {email} with ID: {user_id}")
             return user_id
         except ClientError as e:
             logger.error(f"Error creating user: {e}")
@@ -530,6 +537,37 @@ class DynamoDBDatabase:
         except ClientError as e:
             logger.error(f"Error getting user by email: {e}")
             return None
+    
+    def get_all_users_by_email(self, email: str) -> List[Dict]:
+        """Get all users with the same email (for finding duplicates)"""
+        try:
+            response = self.users_table.query(
+                IndexName='email-index',
+                KeyConditionExpression='#email = :email',
+                ExpressionAttributeNames={'#email': 'email'},
+                ExpressionAttributeValues={':email': email}
+            )
+            items = response.get('Items', [])
+            
+            # Deserialize preferences for each item
+            for item in items:
+                if 'preferences' in item:
+                    item['preferences'] = self._deserialize_json(item['preferences'])
+            
+            return items
+        except ClientError as e:
+            logger.error(f"Error getting users by email: {e}")
+            return []
+    
+    def delete_user(self, user_id: str) -> bool:
+        """Delete a user by ID"""
+        try:
+            self.users_table.delete_item(Key={'user_id': user_id})
+            logger.info(f"Deleted user: {user_id}")
+            return True
+        except ClientError as e:
+            logger.error(f"Error deleting user: {e}")
+            return False
     
     def authenticate_user(self, email: str, password: str) -> Optional[Dict]:
         """Authenticate user with email and password"""
