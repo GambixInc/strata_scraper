@@ -615,11 +615,10 @@ def list_files():
         
         # List scraped files from S3 only
         try:
-            from s3_storage import S3Storage
-            s3_storage = S3Storage()
+            from s3_storage import list_files_in_s3, get_s3_client
             
             # List all files in the scraped_sites prefix
-            all_files = s3_storage.list_files_in_prefix('scraped_sites/')
+            all_files = list_files_in_s3('scraped_sites/')
             
             # Group files by directory
             directories = {}
@@ -632,10 +631,11 @@ def list_files():
                     directories[dir_name].append(file_key)
             
             # Create scraped files list
+            _, bucket_name = get_s3_client()
             for dir_name, files in directories.items():
                 scraped_files.append({
                     'name': dir_name,
-                    'path': f"s3://{s3_storage.bucket_name}/scraped_sites/{dir_name}",
+                    'path': f"s3://{bucket_name}/scraped_sites/{dir_name}",
                     'type': 'scraped',
                     'storage': 's3',
                     'file_count': len(files)
@@ -721,11 +721,10 @@ def list_scraped_sites():
     try:
         # List scraped sites from S3 only
         try:
-            from s3_storage import S3Storage
-            s3_storage = S3Storage()
+            from s3_storage import list_files_in_s3
             
             # List all files in the scraped_sites prefix
-            all_files = s3_storage.list_files_in_prefix('scraped_sites/')
+            all_files = list_files_in_s3('scraped_sites/')
             
             # Extract unique directory names
             directories = set()
@@ -753,7 +752,9 @@ def list_scraped_sites():
 @app.route('/api/report/<site>/<report_type>', methods=['GET'])
 def get_report(site, report_type):
     """Serve a specific report file for a scraped site."""
-    scraped_dir = f"s3://{S3Storage().bucket_name}/scraped_sites/{site}"
+    from s3_storage import get_s3_client
+    _, bucket_name = get_s3_client()
+    scraped_dir = f"s3://{bucket_name}/scraped_sites/{site}"
     
     # Map report types to actual files
     if report_type == 'analysis':
@@ -1157,16 +1158,11 @@ def get_project_scraped_data(project_id):
                 }
             })
             
-            # S3 storage - use S3Storage to read files
+            # S3 storage - use direct functions to read files
             app.logger.info(f"Reading scraped data from S3: {scraped_files_path}")
             
-            # Initialize S3 storage
-            from s3_storage import S3Storage
-            s3_storage = S3Storage()
-            
             # Parse S3 path to get the key
-            s3_key = s3_storage.parse_s3_path(scraped_files_path)
-            if not s3_key:
+            if not scraped_files_path.startswith('s3://'):
                 app.logger.error(f"Invalid S3 path format: {scraped_files_path}")
                 return jsonify({
                     'success': True,
@@ -1176,11 +1172,28 @@ def get_project_scraped_data(project_id):
                     }
                 })
             
+            # Remove s3:// prefix and get the key
+            path_without_prefix = scraped_files_path[5:]
+            parts = path_without_prefix.split('/', 1)
+            if len(parts) != 2:
+                app.logger.error(f"Invalid S3 path format: {scraped_files_path}")
+                return jsonify({
+                    'success': True,
+                    'data': {
+                        'has_scraped_data': False,
+                        'message': 'Invalid S3 path format'
+                    }
+                })
+            
+            bucket, s3_key = parts
+            
             # Read metadata.json from S3
+            from s3_storage import read_json_from_s3, read_file_from_s3, file_exists_in_s3
+            
             metadata_key = f"{s3_key}/metadata.json"
             metadata = {}
-            if s3_storage.file_exists(metadata_key):
-                metadata = s3_storage.read_json_content(metadata_key)
+            if file_exists_in_s3(metadata_key):
+                metadata = read_json_from_s3(metadata_key)
                 if metadata:
                     app.logger.info(f"Successfully read metadata from S3: {metadata_key}")
                 else:
@@ -1191,8 +1204,8 @@ def get_project_scraped_data(project_id):
             # Read seo_report.txt from S3
             seo_report_key = f"{s3_key}/seo_report.txt"
             seo_report = ""
-            if s3_storage.file_exists(seo_report_key):
-                seo_report = s3_storage.read_file_content(seo_report_key)
+            if file_exists_in_s3(seo_report_key):
+                seo_report = read_file_from_s3(seo_report_key)
                 if seo_report:
                     app.logger.info(f"Successfully read SEO report from S3: {seo_report_key}")
                 else:

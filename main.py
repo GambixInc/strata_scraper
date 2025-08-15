@@ -10,7 +10,7 @@ import uuid
 
 # Try to import S3 storage, but don't fail if not available
 try:
-    from s3_storage import S3Storage
+    from s3_storage import get_s3_client
     S3_AVAILABLE = True
 except ImportError:
     S3_AVAILABLE = False
@@ -414,11 +414,14 @@ def save_content_to_s3(scraped_data, url, base_filename=None):
         return None
     
     try:
-        s3_storage = S3Storage()
-        s3_prefix = s3_storage.save_scraped_content_to_s3(scraped_data, url, base_filename)
+        # Use the new direct function approach
+        from s3_storage import save_scraped_content_to_s3, get_s3_client
+        
+        s3_prefix = save_scraped_content_to_s3(scraped_data, url, base_filename)
         
         if s3_prefix:
-            print(f"✅ All content saved to S3: s3://{s3_storage.bucket_name}/{s3_prefix}")
+            _, bucket_name = get_s3_client()
+            print(f"✅ All content saved to S3: s3://{bucket_name}/{s3_prefix}")
             return s3_prefix
         else:
             print("❌ Failed to save content to S3")
@@ -1165,14 +1168,14 @@ if __name__ == "__main__":
             
             # Save analysis results to S3
             try:
-                s3_storage = S3Storage()
+                from s3_storage import upload_json_to_s3
                 analysis_key = f"{saved_location}/content_analysis.json"
-                if s3_storage.upload_json_content(analysis_results, analysis_key):
+                if upload_json_to_s3(analysis_results, analysis_key):
                     print(f"📊 Content analysis saved to S3: {analysis_key}")
                 
                 if seo_data.get('detailed_analytics'):
                     analytics_key = f"{saved_location}/analytics_data.json"
-                    if s3_storage.upload_json_content(seo_data['detailed_analytics'], analytics_key):
+                    if upload_json_to_s3(seo_data['detailed_analytics'], analytics_key):
                         print(f"📈 Analytics data saved to S3: {analytics_key}")
             except Exception as e:
                 print(f"⚠️ Failed to save analysis files to S3: {e}")

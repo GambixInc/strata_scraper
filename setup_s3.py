@@ -106,19 +106,19 @@ def test_configuration():
             return False
         
         # Test S3 connection
-        from s3_storage import S3Storage
-        s3_storage = S3Storage()
+        from s3_storage import get_s3_client, upload_file_to_s3, delete_files_in_s3
+        get_s3_client()  # This will test the connection
         print("✅ S3 connection successful!")
         
         # Test basic upload
         test_content = "S3 configuration test"
         test_key = "test/setup_test.txt"
         
-        if s3_storage.upload_file_content(test_content, test_key):
+        if upload_file_to_s3(test_content, test_key):
             print("✅ Test upload successful!")
             
             # Clean up test file
-            s3_storage.delete_files_in_prefix("test/")
+            delete_files_in_s3("test/")
             print("✅ Test cleanup successful!")
             
             return True
