@@ -1175,60 +1175,30 @@ def get_project_scraped_data(project_id):
         
         # Read scraped data from S3 only
         try:
-            # S3 storage - use direct functions to read files
-            app.logger.info(f"Reading scraped data from S3: {scraped_files_path}")
+            # Use S3Storage class for all S3 operations - best practice
+            from s3_storage import S3Storage
+            s3_storage = S3Storage()
             
-            # Parse S3 path to get the key
-            if not scraped_files_path.startswith('s3://'):
-                app.logger.error(f"Invalid S3 path format: {scraped_files_path}")
-                return jsonify({
-                    'success': True,
-                    'data': {
-                        'has_scraped_data': False,
-                        'message': 'Invalid S3 path format'
-                    }
-                })
+            app.logger.info(f"Reading scraped data from S3 prefix: {scraped_files_path}")
             
-            # Remove s3:// prefix and get the key
-            path_without_prefix = scraped_files_path[5:]
-            parts = path_without_prefix.split('/', 1)
-            if len(parts) != 2:
-                app.logger.error(f"Invalid S3 path format: {scraped_files_path}")
-                return jsonify({
-                    'success': True,
-                    'data': {
-                        'has_scraped_data': False,
-                        'message': 'Invalid S3 path format'
-                    }
-                })
-            
-            bucket, s3_key = parts
+            # The scraped_files_path is already the S3 prefix (e.g., "scraped_sites/_bevy.org_20250815_140944_661_928ad93f")
+            s3_prefix = scraped_files_path
             
             # Read metadata.json from S3
-            from s3_storage import read_json_from_s3, read_file_from_s3, file_exists_in_s3
-            
-            metadata_key = f"{s3_key}/metadata.json"
-            metadata = {}
-            if file_exists_in_s3(metadata_key):
-                metadata = read_json_from_s3(metadata_key)
-                if metadata:
-                    app.logger.info(f"Successfully read metadata from S3: {metadata_key}")
-                else:
-                    app.logger.warning(f"Failed to read metadata from S3: {metadata_key}")
+            metadata_key = f"{s3_prefix}/metadata.json"
+            metadata = s3_storage.read_json_content(metadata_key) or {}
+            if metadata:
+                app.logger.info(f"Successfully read metadata from S3: {metadata_key}")
             else:
-                app.logger.warning(f"Metadata file not found in S3: {metadata_key}")
+                app.logger.warning(f"Metadata file not found or empty in S3: {metadata_key}")
             
             # Read seo_report.txt from S3
-            seo_report_key = f"{s3_key}/seo_report.txt"
-            seo_report = ""
-            if file_exists_in_s3(seo_report_key):
-                seo_report = read_file_from_s3(seo_report_key)
-                if seo_report:
-                    app.logger.info(f"Successfully read SEO report from S3: {seo_report_key}")
-                else:
-                    app.logger.warning(f"Failed to read SEO report from S3: {seo_report_key}")
+            seo_report_key = f"{s3_prefix}/seo_report.txt"
+            seo_report = s3_storage.read_file_content(seo_report_key) or ""
+            if seo_report:
+                app.logger.info(f"Successfully read SEO report from S3: {seo_report_key}")
             else:
-                app.logger.warning(f"SEO report file not found in S3: {seo_report_key}")
+                app.logger.warning(f"SEO report file not found or empty in S3: {seo_report_key}")
             
             # Extract key data from metadata
             seo_data = metadata.get('seo_metadata', {})
