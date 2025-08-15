@@ -303,3 +303,113 @@ class S3Storage:
         except Exception as e:
             logger.error(f"Failed to delete files in prefix {prefix}: {e}")
             return False
+
+    def read_file_content(self, s3_key: str) -> Optional[str]:
+        """
+        Read file content from S3
+        
+        Args:
+            s3_key: The S3 key of the file to read
+            
+        Returns:
+            str: File content or None if failed
+        """
+        try:
+            response = self.s3_client.get_object(
+                Bucket=self.bucket_name,
+                Key=s3_key
+            )
+            content = response['Body'].read().decode('utf-8')
+            logger.info(f"Successfully read file from S3: {s3_key}")
+            return content
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
+            if error_code == 'NoSuchKey':
+                logger.warning(f"File not found in S3: {s3_key}")
+                return None
+            else:
+                logger.error(f"Failed to read file from S3 {s3_key}: {e}")
+                return None
+        except Exception as e:
+            logger.error(f"Unexpected error reading file from S3 {s3_key}: {e}")
+            return None
+
+    def read_json_content(self, s3_key: str) -> Optional[Dict[str, Any]]:
+        """
+        Read JSON content from S3
+        
+        Args:
+            s3_key: The S3 key of the JSON file to read
+            
+        Returns:
+            Dict: JSON data or None if failed
+        """
+        try:
+            content = self.read_file_content(s3_key)
+            if content:
+                return json.loads(content)
+            return None
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON from S3 {s3_key}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error reading JSON from S3 {s3_key}: {e}")
+            return None
+
+    def file_exists(self, s3_key: str) -> bool:
+        """
+        Check if a file exists in S3
+        
+        Args:
+            s3_key: The S3 key of the file to check
+            
+        Returns:
+            bool: True if file exists, False otherwise
+        """
+        try:
+            self.s3_client.head_object(Bucket=self.bucket_name, Key=s3_key)
+            return True
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
+            if error_code == '404':
+                return False
+            else:
+                logger.error(f"Error checking file existence in S3 {s3_key}: {e}")
+                return False
+        except Exception as e:
+            logger.error(f"Unexpected error checking file existence in S3 {s3_key}: {e}")
+            return False
+
+    def parse_s3_path(self, s3_path: str) -> Optional[str]:
+        """
+        Parse S3 path (s3://bucket/key) and return the S3 key
+        
+        Args:
+            s3_path: S3 path in format s3://bucket/key
+            
+        Returns:
+            str: S3 key or None if invalid format
+        """
+        try:
+            if not s3_path.startswith('s3://'):
+                return None
+            
+            # Remove s3:// prefix
+            path_without_prefix = s3_path[5:]
+            
+            # Split by first slash to separate bucket and key
+            parts = path_without_prefix.split('/', 1)
+            if len(parts) != 2:
+                return None
+            
+            bucket, key = parts
+            
+            # Verify bucket matches our configured bucket
+            if bucket != self.bucket_name:
+                logger.warning(f"S3 path bucket '{bucket}' doesn't match configured bucket '{self.bucket_name}'")
+                return None
+            
+            return key
+        except Exception as e:
+            logger.error(f"Error parsing S3 path {s3_path}: {e}")
+            return None

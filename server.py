@@ -113,14 +113,14 @@ Talisman(app,
 # Configure logging
 if not app.debug:
     try:
-        if not os.path.exists('logs'):
-            os.mkdir('logs')
-        file_handler = RotatingFileHandler('logs/web_scraper.log', maxBytes=10240, backupCount=10)
-        file_handler.setFormatter(logging.Formatter(
-            '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
-        ))
-        file_handler.setLevel(logging.INFO)
-        app.logger.addHandler(file_handler)
+    if not os.path.exists('logs'):
+        os.mkdir('logs')
+    file_handler = RotatingFileHandler('logs/web_scraper.log', maxBytes=10240, backupCount=10)
+    file_handler.setFormatter(logging.Formatter(
+        '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+    ))
+    file_handler.setLevel(logging.INFO)
+    app.logger.addHandler(file_handler)
     except Exception as e:
         app.logger.warning(f"Could not set up file logging: {e}")
         # Continue with console logging only
@@ -887,7 +887,7 @@ def create_project():
         # Create database instance
         global db
         try:
-            project_id = db.create_project(user_id, domain, name, settings)
+        project_id = db.create_project(user_id, domain, name, settings)
             if not project_id:
                 return jsonify({'success': False, 'error': 'Failed to create project in database'}), 500
         except Exception as db_error:
@@ -1115,44 +1115,78 @@ def get_project_scraped_data(project_id):
         
         # Read scraped data from files
         try:
-            # Handle both relative and absolute paths
+            # Handle both S3 and local file paths
             if scraped_files_path.startswith('s3://'):
-                # S3 storage - we'll need to implement S3 file reading
-                app.logger.warning(f"S3 storage not yet implemented for reading: {scraped_files_path}")
-                return jsonify({
-                    'success': True,
-                    'data': {
-                        'has_scraped_data': False,
-                        'message': 'S3 storage reading not yet implemented'
-                    }
-                })
+                # S3 storage - use S3Storage to read files
+                app.logger.info(f"Reading scraped data from S3: {scraped_files_path}")
+                
+                # Initialize S3 storage
+                from s3_storage import S3Storage
+                s3_storage = S3Storage()
+                
+                # Parse S3 path to get the key
+                s3_key = s3_storage.parse_s3_path(scraped_files_path)
+                if not s3_key:
+                    app.logger.error(f"Invalid S3 path format: {scraped_files_path}")
+                    return jsonify({
+                        'success': True,
+                        'data': {
+                            'has_scraped_data': False,
+                            'message': 'Invalid S3 path format'
+                        }
+                    })
+                
+                # Read metadata.json from S3
+                metadata_key = f"{s3_key}/metadata.json"
+                metadata = {}
+                if s3_storage.file_exists(metadata_key):
+                    metadata = s3_storage.read_json_content(metadata_key)
+                    if metadata:
+                        app.logger.info(f"Successfully read metadata from S3: {metadata_key}")
+                    else:
+                        app.logger.warning(f"Failed to read metadata from S3: {metadata_key}")
+                else:
+                    app.logger.warning(f"Metadata file not found in S3: {metadata_key}")
+                
+                # Read seo_report.txt from S3
+                seo_report_key = f"{s3_key}/seo_report.txt"
+                seo_report = ""
+                if s3_storage.file_exists(seo_report_key):
+                    seo_report = s3_storage.read_file_content(seo_report_key)
+                    if seo_report:
+                        app.logger.info(f"Successfully read SEO report from S3: {seo_report_key}")
+                    else:
+                        app.logger.warning(f"Failed to read SEO report from S3: {seo_report_key}")
+                else:
+                    app.logger.warning(f"SEO report file not found in S3: {seo_report_key}")
+                    
             else:
                 # File path - resolve relative path to absolute
                 if not os.path.isabs(scraped_files_path):
                     # If it's a relative path, make it absolute relative to the current working directory
                     scraped_files_path = os.path.abspath(scraped_files_path)
                 
-                app.logger.info(f"Reading scraped data from: {scraped_files_path}")
-            
-            # Read metadata.json
-            metadata_path = os.path.join(scraped_files_path, 'metadata.json')
-            if os.path.exists(metadata_path):
-                with open(metadata_path, 'r', encoding='utf-8') as f:
-                    metadata = json.load(f)
-                app.logger.info(f"Successfully read metadata from: {metadata_path}")
-            else:
-                app.logger.warning(f"Metadata file not found: {metadata_path}")
-                metadata = {}
-            
-            # Read seo_report.txt
-            seo_report_path = os.path.join(scraped_files_path, 'seo_report.txt')
-            seo_report = ""
-            if os.path.exists(seo_report_path):
-                with open(seo_report_path, 'r', encoding='utf-8') as f:
-                    seo_report = f.read()
-                app.logger.info(f"Successfully read SEO report from: {seo_report_path}")
-            else:
-                app.logger.warning(f"SEO report file not found: {seo_report_path}")
+                app.logger.info(f"Reading scraped data from local files: {scraped_files_path}")
+                
+                # Read metadata.json
+                metadata_path = os.path.join(scraped_files_path, 'metadata.json')
+                if os.path.exists(metadata_path):
+                    with open(metadata_path, 'r', encoding='utf-8') as f:
+                        metadata = json.load(f)
+                    app.logger.info(f"Successfully read metadata from: {metadata_path}")
+                else:
+                    app.logger.warning(f"Metadata file not found: {metadata_path}")
+                    metadata = {}
+                
+                # Read seo_report.txt
+                seo_report_path = os.path.join(scraped_files_path, 'seo_report.txt')
+                seo_report = ""
+                if os.path.exists(seo_report_path):
+                    with open(seo_report_path, 'r', encoding='utf-8') as f:
+                        seo_report = f.read()
+                    app.logger.info(f"Successfully read SEO report from: {seo_report_path}")
+                else:
+                    app.logger.warning(f"SEO report file not found: {seo_report_path}")
             
             # Extract key data from metadata
             seo_data = metadata.get('seo_metadata', {})
