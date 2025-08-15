@@ -71,8 +71,12 @@ else:
     if allowed_origins and allowed_origins[0]:
         CORS(app, origins=allowed_origins)
     else:
-        # Default to same origin if no origins specified
-        CORS(app, origins=['https://strata.cx'])
+        # Default to common production origins
+        CORS(app, origins=[
+            'https://strata.cx',
+            'https://main.d18ltg4bq86sg1.amplifyapp.com',
+            'https://*.amplifyapp.com'
+        ])
 
 # Add rate limiting
 if DEBUG:
@@ -132,11 +136,12 @@ def initialize_database():
             import boto3
             region = os.getenv('AWS_REGION', 'us-east-1')
             sts = boto3.client('sts', region_name=region)
-            sts.get_caller_identity()
-            app.logger.info("✅ AWS credentials verified")
+            caller_identity = sts.get_caller_identity()
+            app.logger.info(f"✅ AWS credentials verified for: {caller_identity.get('Arn', 'Unknown')}")
         except Exception as e:
             app.logger.warning(f"⚠️ AWS credentials check failed: {e}")
-            app.logger.info("   Continuing anyway - credentials may be available through IAM roles")
+            app.logger.info("   This may be due to missing IAM role permissions")
+            app.logger.info("   The application will attempt to use available credentials")
         
         # Create global database instance
         global db
@@ -872,12 +877,22 @@ def create_project():
             return jsonify({'success': False, 'error': 'Domain too long'}), 400
         
         # Ensure user exists in database
-        user_data = ensure_user_exists(email, request.current_user)
-        user_id = user_data['user_id']
+        try:
+            user_data = ensure_user_exists(email, request.current_user)
+            user_id = user_data['user_id']
+        except Exception as user_error:
+            app.logger.error(f"Error ensuring user exists: {user_error}")
+            return jsonify({'success': False, 'error': 'Failed to verify user account'}), 500
         
         # Create database instance
         global db
-        project_id = db.create_project(user_id, domain, name, settings)
+        try:
+            project_id = db.create_project(user_id, domain, name, settings)
+            if not project_id:
+                return jsonify({'success': False, 'error': 'Failed to create project in database'}), 500
+        except Exception as db_error:
+            app.logger.error(f"Error creating project in database: {db_error}")
+            return jsonify({'success': False, 'error': 'Database error while creating project'}), 500
         
         # Automatically scrape the website after creating the project
         try:
@@ -1366,11 +1381,19 @@ def get_dashboard_data():
         email = request.current_user['email']
         
         # Ensure user exists in database
-        user_data = ensure_user_exists(email, request.current_user)
+        try:
+            user_data = ensure_user_exists(email, request.current_user)
+        except Exception as user_error:
+            app.logger.error(f"Error ensuring user exists for dashboard: {user_error}")
+            return jsonify({'success': False, 'error': 'Failed to verify user account'}), 500
         
-        # Create database instance
+        # Get dashboard data
         global db
-        dashboard_data = db.get_dashboard_data(user_data['user_id'])
+        try:
+            dashboard_data = db.get_dashboard_data(user_data['user_id'])
+        except Exception as db_error:
+            app.logger.error(f"Error getting dashboard data from database: {db_error}")
+            return jsonify({'success': False, 'error': 'Database error while fetching dashboard data'}), 500
         
         return jsonify({
             'success': True,
