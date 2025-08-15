@@ -38,5 +38,12 @@ echo "🌐 Starting server..."
 echo "   Press Ctrl+C to stop"
 echo ""
 
-# Start the server
-python3 server.py
+# Start the server with error handling
+echo ""
+echo "🌐 Starting server..."
+if python3 server.py; then
+    echo "✅ Server stopped gracefully"
+else
+    echo "❌ Server crashed or was stopped with error"
+    exit 1
+fi

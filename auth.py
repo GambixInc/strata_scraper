@@ -12,8 +12,9 @@ AWS_USER_POOL_ID = os.getenv('AWS_USER_POOLS_ID')
 def verify_cognito_token(token: str) -> Optional[Dict[str, Any]]:
     """Verify AWS Cognito token and return user data"""
     try:
-        # For now, we'll decode the token without verification
-        # In production, you should verify the token signature with AWS Cognito
+        # TODO: Implement proper JWT verification with AWS Cognito
+        # For now, we'll decode the token without verification for development
+        # In production, you MUST verify the token signature with AWS Cognito
         payload = jwt.decode(token, options={"verify_signature": False})
         
         # Extract user information from Cognito token

@@ -51,12 +51,15 @@ def calculate_health_score(scraped_data: Dict) -> int:
     # Ensure score is between 0 and 100
     return max(0, min(100, score))
 
-sentry_sdk.init(
-    dsn="https://ffde2275aa6db7e04c3e35413b820421@o4509488900276224.ingest.us.sentry.io/4509610363191296",
-    # Add data like request headers and IP for users,
-    # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
-    send_default_pii=True,
-)
+# Initialize Sentry for error tracking (optional)
+sentry_dsn = os.getenv('SENTRY_DSN')
+if sentry_dsn:
+    sentry_sdk.init(
+        dsn=sentry_dsn,
+        # Add data like request headers and IP for users,
+        # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
+        send_default_pii=True,
+    )
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -66,38 +69,66 @@ HOST = os.getenv('HOST', '0.0.0.0')
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+
+# Configure CORS based on environment
+if DEBUG:
+    # Allow all origins in development
+    CORS(app)
+else:
+    # Restrict CORS in production
+    allowed_origins = os.getenv('ALLOWED_ORIGINS', '').split(',')
+    if allowed_origins and allowed_origins[0]:
+        CORS(app, origins=allowed_origins)
+    else:
+        # Default to same origin if no origins specified
+        CORS(app, origins=['https://strata.cx'])
 
 # Add rate limiting
+if DEBUG:
+    # Lenient limits for development
+    default_limits = ["10000 per day", "1000 per hour"]
+else:
+    # Stricter limits for production
+    default_limits = ["1000 per day", "100 per hour"]
+
 limiter = Limiter(
     app=app,
     key_func=get_remote_address,
-    default_limits=["10000 per day", "1000 per hour"]  # Very lenient for development
+    default_limits=default_limits
 )
 
 # Configure security headers
-Talisman(app, 
-    content_security_policy={
-        'default-src': "'self'",
-        'script-src': "'self' 'unsafe-inline'",
-        'style-src': "'self' 'unsafe-inline'",
-        'connect-src': "'self' http://localhost:5000",
-    },
-    force_https=False,  # Disable automatic HTTPS redirects
-    force_https_permanent=False  # Disable permanent HTTPS redirects
+csp_config = {
+    'default-src': "'self'",
+    'script-src': "'self' 'unsafe-inline'",
+    'style-src': "'self' 'unsafe-inline'",
+    'connect-src': "'self'",
+}
 
+# Add API endpoints to connect-src in development
+if DEBUG:
+    csp_config['connect-src'] += f" http://{HOST}:{PORT}"
+
+Talisman(app, 
+    content_security_policy=csp_config,
+    force_https=not DEBUG,  # Force HTTPS in production
+    force_https_permanent=not DEBUG  # Force permanent HTTPS in production
 )
 
 # Configure logging
 if not app.debug:
-    if not os.path.exists('logs'):
-        os.mkdir('logs')
-    file_handler = RotatingFileHandler('logs/web_scraper.log', maxBytes=10240, backupCount=10)
-    file_handler.setFormatter(logging.Formatter(
-        '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
-    ))
-    file_handler.setLevel(logging.INFO)
-    app.logger.addHandler(file_handler)
+    try:
+        if not os.path.exists('logs'):
+            os.mkdir('logs')
+        file_handler = RotatingFileHandler('logs/web_scraper.log', maxBytes=10240, backupCount=10)
+        file_handler.setFormatter(logging.Formatter(
+            '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+        ))
+        file_handler.setLevel(logging.INFO)
+        app.logger.addHandler(file_handler)
+    except Exception as e:
+        app.logger.warning(f"Could not set up file logging: {e}")
+        # Continue with console logging only
     app.logger.setLevel(logging.INFO)
     app.logger.info('Web Scraper startup')
 
@@ -193,7 +224,9 @@ def get_user_profile():
             
     except Exception as e:
         app.logger.error(f"Error getting user profile: {e}")
-        return jsonify({'success': False, 'error': 'Failed to get user profile'}), 500
+        # Don't expose internal errors to client in production
+        error_message = 'Failed to get user profile' if not DEBUG else str(e)
+        return jsonify({'success': False, 'error': error_message}), 500
 
 @app.route('/api/user/profile', methods=['PUT'])
 @require_auth
@@ -228,7 +261,9 @@ def update_user_profile():
         
     except Exception as e:
         app.logger.error(f"Error updating user profile: {e}")
-        return jsonify({'success': False, 'error': 'Failed to update profile'}), 500
+        # Don't expose internal errors to client in production
+        error_message = 'Failed to update profile' if not DEBUG else str(e)
+        return jsonify({'success': False, 'error': error_message}), 500
 
 # API Endpoints (must come before catch-all route)
 
@@ -837,6 +872,16 @@ def create_project():
         
         if not domain:
             return jsonify({'success': False, 'error': 'Website URL is required'}), 400
+        
+        # Validate domain format
+        import re
+        domain_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$'
+        if not re.match(domain_pattern, domain):
+            return jsonify({'success': False, 'error': 'Invalid domain format'}), 400
+        
+        # Validate domain length
+        if len(domain) > 253:
+            return jsonify({'success': False, 'error': 'Domain too long'}), 400
         
         # Ensure user exists in database
         user_data = ensure_user_exists(email, request.current_user)
@@ -1523,21 +1568,21 @@ def serve_react_app(path):
 
 if __name__ == '__main__':
     print("🌐 Starting Gambix Strata Web Scraper Server...")
-    print(f"📱 Frontend will be available at: http://localhost:{PORT}")
-    print(f"🔧 Legacy API endpoint: http://localhost:{PORT}/api/scrape")
-    print(f"🚀 Optimize endpoint: http://localhost:{PORT}/api/optimize")
-    print(f"📁 Files endpoint: http://localhost:{PORT}/api/files")
-    print(f"📊 Tracker stats: http://localhost:{PORT}/api/tracker/stats")
-    print(f"📋 Tracker summary: http://localhost:{PORT}/api/tracker/summary")
-    print(f"💚 Health check: http://localhost:{PORT}/api/health")
+    print(f"📱 Frontend will be available at: http://{HOST}:{PORT}")
+    print(f"🔧 Legacy API endpoint: http://{HOST}:{PORT}/api/scrape")
+    print(f"🚀 Optimize endpoint: http://{HOST}:{PORT}/api/optimize")
+    print(f"📁 Files endpoint: http://{HOST}:{PORT}/api/files")
+    print(f"📊 Tracker stats: http://{HOST}:{PORT}/api/tracker/stats")
+    print(f"📋 Tracker summary: http://{HOST}:{PORT}/api/tracker/summary")
+    print(f"💚 Health check: http://{HOST}:{PORT}/api/health")
     print(f"\n🎯 Gambix Strata API Endpoints:")
-    print(f"   - Users: http://localhost:{PORT}/api/gambix/users")
-    print(f"   - Projects: http://localhost:{PORT}/api/gambix/projects")
-    print(f"   - Site Health: http://localhost:{PORT}/api/gambix/projects/<id>/health")
-    print(f"   - Pages: http://localhost:{PORT}/api/gambix/projects/<id>/pages")
-    print(f"   - Recommendations: http://localhost:{PORT}/api/gambix/projects/<id>/recommendations")
-    print(f"   - Alerts: http://localhost:{PORT}/api/gambix/alerts")
-    print(f"   - Dashboard: http://localhost:{PORT}/api/gambix/dashboard/<user_id>")
+    print(f"   - Users: http://{HOST}:{PORT}/api/gambix/users")
+    print(f"   - Projects: http://{HOST}:{PORT}/api/gambix/projects")
+    print(f"   - Site Health: http://{HOST}:{PORT}/api/gambix/projects/<id>/health")
+    print(f"   - Pages: http://{HOST}:{PORT}/api/gambix/projects/<id>/pages")
+    print(f"   - Recommendations: http://{HOST}:{PORT}/api/gambix/projects/<id>/recommendations")
+    print(f"   - Alerts: http://{HOST}:{PORT}/api/gambix/alerts")
+    print(f"   - Dashboard: http://{HOST}:{PORT}/api/gambix/dashboard/<user_id>")
     print(f"\n📂 Storage Configuration:")
     print("   - Database: DynamoDB (gambix_strata_* tables)")
     print("   - Storage: S3 bucket (gambix-strata-production)")
