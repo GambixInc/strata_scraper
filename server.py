@@ -61,26 +61,13 @@ DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 app = Flask(__name__)
 
-# Configure CORS based on environment
-if DEBUG:
-    # Allow all origins in development
-    CORS(app, supports_credentials=True)
-else:
-    # Restrict CORS in production
-    allowed_origins = os.getenv('ALLOWED_ORIGINS', '').split(',')
-    if allowed_origins and allowed_origins[0]:
-        CORS(app, origins=allowed_origins, supports_credentials=True)
-    else:
-        # Default to common production origins
-        CORS(app, 
-             origins=[
-                 'https://strata.cx',
-                 'https://main.d18ltg4bq86sg1.amplifyapp.com',
-                 'https://d18ltg4bq86sg1.amplifyapp.com'
-             ], 
-             supports_credentials=True,
-             allow_headers=['Content-Type', 'Authorization'],
-             methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
+# Configure CORS to allow all origins, supports credentials, and specific headers
+CORS(app, 
+     origins="*", 
+     supports_credentials=True, 
+     allow_headers=['Content-Type', 'Authorization'], 
+     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+)
 
 # Add rate limiting
 if DEBUG:
@@ -1664,18 +1651,6 @@ def rescrape_project(project_id):
     except Exception as e:
         app.logger.error(f"Error re-scraping project: {e}")
         return jsonify({'success': False, 'error': 'Failed to re-scrape project'}), 500
-
-# Serve static files (HTML, CSS, JS) - Must be at the end
-@app.route('/', defaults={'path': ''})
-@app.route('/<path:path>')
-def serve_react_app(path):
-    if path.startswith('api/'):
-        # Let Flask routes handle API requests - return 404 if not handled
-        return jsonify({'error': 'API endpoint not found'}), 404
-    elif path.startswith('strata_design/') or path.startswith('static/'):
-        # Let other routes handle static asset requests
-        return app.send_static_file(path)
-    return send_from_directory('strata_design', 'index.html')
 
 if __name__ == '__main__':
     print("🌐 Starting Gambix Strata Web Scraper Server...")
