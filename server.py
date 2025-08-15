@@ -62,21 +62,20 @@ DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 app = Flask(__name__)
 
 # Configure CORS based on environment
-if DEBUG:
-    # Allow all origins in development
-    CORS(app)
-else:
-    # Restrict CORS in production
-    allowed_origins = os.getenv('ALLOWED_ORIGINS', '').split(',')
-    if allowed_origins and allowed_origins[0]:
-        CORS(app, origins=allowed_origins)
-    else:
-        # Default to common production origins
-        CORS(app, origins=[
-            'https://strata.cx',
-            'https://main.d18ltg4bq86sg1.amplifyapp.com',
-            'https://*.amplifyapp.com'
-        ])
+# if DEBUG:
+#     # Allow all origins in development
+#     CORS(app)
+# else:
+#     # Restrict CORS in production
+#     allowed_origins = os.getenv('ALLOWED_ORIGINS', '').split(',')
+#     if allowed_origins and allowed_origins[0]:
+#         CORS(app, origins=allowed_origins)
+#     else:
+#         # Default to common production origins
+#         CORS(app, origins=[
+#             'https://strata.cx',
+#             'https://main.d18ltg4bq86sg1.amplifyapp.com',
+#         ])
 
 # Add rate limiting
 if DEBUG:
