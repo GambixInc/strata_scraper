@@ -9,7 +9,7 @@ import sys
 # Add the current directory to the path so we can import our modules
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from dynamodb_database import GambixStrataDatabase
+from dynamodb_database import DynamoDBDatabase
 
 def update_project_paths():
     """Update existing projects to use S3 paths"""
@@ -18,7 +18,7 @@ def update_project_paths():
     
     try:
         # Initialize database
-        db = GambixStrataDatabase()
+        db = DynamoDBDatabase()
         
         # Get all projects
         all_projects = []
@@ -46,7 +46,7 @@ def update_specific_project(project_id):
     
     try:
         # Initialize database
-        db = GambixStrataDatabase()
+        db = DynamoDBDatabase()
         
         # Get the project
         project = db.get_project(project_id)
@@ -64,14 +64,23 @@ def update_specific_project(project_id):
         
         # Convert local path to S3 path
         if current_path and not current_path.startswith('s3://'):
-            # Extract the directory name from the local path
-            # e.g., "/home/ubuntu/strata_scraper/scraped_sites/_python.org_20250815_031130_918_762855c9"
-            # should become "s3://gambix-strata-production/scraped_sites/_python.org_20250815_031130_918_762855c9"
+            # Handle different path formats:
+            # 1. Full local path: "/home/ubuntu/strata_scraper/scraped_sites/_python.org_20250815_031130_918_762855c9"
+            # 2. Relative path: "scraped_sites/_python.org_20250815_031130_918_762855c9"
+            # 3. Just directory name: "_python.org_20250815_031130_918_762855c9"
             
-            # Get the directory name (last part of the path)
-            dir_name = os.path.basename(current_path)
+            # Extract the directory name from the path
+            if '/' in current_path:
+                # If it's a full path, get the last part
+                dir_name = os.path.basename(current_path)
+            elif current_path.startswith('scraped_sites/'):
+                # If it's a relative path starting with scraped_sites/
+                dir_name = current_path.split('/')[-1]
+            else:
+                # If it's just the directory name
+                dir_name = current_path
             
-            # Construct S3 path
+            # Construct full S3 path
             bucket_name = os.getenv('S3_BUCKET_NAME', 'gambix-strata-production')
             s3_path = f"s3://{bucket_name}/scraped_sites/{dir_name}"
             
