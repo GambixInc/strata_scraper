@@ -49,7 +49,7 @@
 
 - [ ] Set `DEBUG=false`
 - [ ] Configure `ALLOWED_ORIGINS`
-- [ ] Set up `SENTRY_DSN`
+
 - [ ] Configure AWS credentials
 - [ ] Set up HTTPS certificates
 - [ ] Configure logging

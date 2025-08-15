@@ -15,8 +15,6 @@ from logging.handlers import RotatingFileHandler
 from auth import require_auth, require_role
 from typing import Dict
 
-import sentry_sdk
-
 def calculate_health_score(scraped_data: Dict) -> int:
     """Calculate a health score based on scraped data"""
     score = 100
@@ -50,16 +48,6 @@ def calculate_health_score(scraped_data: Dict) -> int:
     
     # Ensure score is between 0 and 100
     return max(0, min(100, score))
-
-# Initialize Sentry for error tracking (optional)
-sentry_dsn = os.getenv('SENTRY_DSN')
-if sentry_dsn:
-    sentry_sdk.init(
-        dsn=sentry_dsn,
-        # Add data like request headers and IP for users,
-        # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
-        send_default_pii=True,
-    )
 
 load_dotenv()  # Load environment variables from .env file
 
