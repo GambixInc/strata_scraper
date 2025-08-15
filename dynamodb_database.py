@@ -21,11 +21,13 @@ class DynamoDBDatabase:
         endpoint_url = os.getenv('DYNAMODB_ENDPOINT_URL')
         
         if endpoint_url:
+            # LocalStack configuration
             self.dynamodb = boto3.resource('dynamodb', endpoint_url=endpoint_url)
             self.client = boto3.client('dynamodb', endpoint_url=endpoint_url)
         else:
-            # Get region from environment or use default
+            # Production AWS configuration - use credential chain
             region = os.getenv('AWS_REGION', 'us-east-1')
+            # Use AWS credential chain (IAM roles, AWS CLI credentials, or environment variables)
             self.dynamodb = boto3.resource('dynamodb', region_name=region)
             self.client = boto3.client('dynamodb', region_name=region)
         
@@ -51,6 +53,33 @@ class DynamoDBDatabase:
     
     def init_database(self):
         """Initialize DynamoDB tables if they don't exist"""
+        # Check if we're in production (no endpoint URL means production AWS)
+        is_production = not os.getenv('DYNAMODB_ENDPOINT_URL')
+        
+        if is_production:
+            # In production, just verify tables exist and are accessible
+            logger.info("🔍 Production mode: Verifying existing DynamoDB tables...")
+            tables_to_verify = [
+                self.users_table_name,
+                self.projects_table_name,
+                self.site_health_table_name,
+                self.pages_table_name,
+                self.recommendations_table_name,
+                self.alerts_table_name,
+                self.optimizations_table_name
+            ]
+            
+            for table_name in tables_to_verify:
+                try:
+                    self.client.describe_table(TableName=table_name)
+                    logger.info(f"✅ Table {table_name} is accessible")
+                except Exception as e:
+                    logger.warning(f"⚠️ Table {table_name} not accessible: {e}")
+            
+            logger.info("✅ DynamoDB tables verification complete")
+            return
+        
+        # Development mode: Create tables if they don't exist
         tables_to_create = [
             self._create_users_table,
             self._create_projects_table,

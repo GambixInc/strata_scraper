@@ -15,6 +15,9 @@ from logging.handlers import RotatingFileHandler
 from auth import require_auth, require_role
 from typing import Dict
 
+# Global database instance
+db = None
+
 def calculate_health_score(scraped_data: Dict) -> int:
     """Calculate a health score based on scraped data"""
     score = 100
@@ -87,9 +90,9 @@ limiter = Limiter(
 
 # Configure security headers
 csp_config = {
-    'default-src': "'self'",
-    'script-src': "'self' 'unsafe-inline'",
-    'style-src': "'self' 'unsafe-inline'",
+        'default-src': "'self'",
+        'script-src': "'self' 'unsafe-inline'",
+        'style-src': "'self' 'unsafe-inline'",
     'connect-src': "'self'",
 }
 
@@ -106,14 +109,14 @@ Talisman(app,
 # Configure logging
 if not app.debug:
     try:
-        if not os.path.exists('logs'):
-            os.mkdir('logs')
-        file_handler = RotatingFileHandler('logs/web_scraper.log', maxBytes=10240, backupCount=10)
-        file_handler.setFormatter(logging.Formatter(
-            '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
-        ))
-        file_handler.setLevel(logging.INFO)
-        app.logger.addHandler(file_handler)
+    if not os.path.exists('logs'):
+        os.mkdir('logs')
+    file_handler = RotatingFileHandler('logs/web_scraper.log', maxBytes=10240, backupCount=10)
+    file_handler.setFormatter(logging.Formatter(
+        '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+    ))
+    file_handler.setLevel(logging.INFO)
+    app.logger.addHandler(file_handler)
     except Exception as e:
         app.logger.warning(f"Could not set up file logging: {e}")
         # Continue with console logging only
@@ -135,6 +138,8 @@ def initialize_database():
             app.logger.warning(f"⚠️ AWS credentials check failed: {e}")
             app.logger.info("   Continuing anyway - credentials may be available through IAM roles")
         
+        # Create global database instance
+        global db
         db = GambixStrataDatabase()
         
         # DynamoDB tables are created automatically if they don't exist
@@ -159,7 +164,7 @@ def ensure_user_exists(email, request_user_data):
     Returns:
         dict: User data from database
     """
-    db = GambixStrataDatabase()
+    global db
     
     # Try to get user from database first
     user_data = db.get_user_by_email(email)
@@ -225,8 +230,8 @@ def update_user_profile():
         # Ensure user exists in database
         user_data = ensure_user_exists(email, request.current_user)
         
-        # Create database instance
-        db = GambixStrataDatabase()
+        # Use global database instance
+        global db
         success = db.update_user_profile(user_data['user_id'], data)
         
         if success:
@@ -792,7 +797,7 @@ def create_user():
         if not email or not name:
             return jsonify({'success': False, 'error': 'Email and name are required'}), 400
         
-        db = GambixStrataDatabase()
+        global db
         user_id = db.create_user(email, name, role, preferences)
         
         return jsonify({
@@ -808,7 +813,7 @@ def create_user():
 def get_user_by_email(email):
     """Get user by email"""
     try:
-        db = GambixStrataDatabase()
+        global db
         user = db.get_user_by_email(email)
         
         if not user:
@@ -871,7 +876,7 @@ def create_project():
         user_id = user_data['user_id']
         
         # Create database instance
-        db = GambixStrataDatabase()
+        global db
         project_id = db.create_project(user_id, domain, name, settings)
         
         # Automatically scrape the website after creating the project
@@ -923,7 +928,7 @@ def create_project():
         return jsonify({
             'success': True,
             'data': {
-                'project_id': project_id,
+            'project_id': project_id,
                 'message': 'Project created successfully and website scraped',
                 'already_exists': False
             }
@@ -944,7 +949,7 @@ def get_user_projects():
         user_data = ensure_user_exists(email, request.current_user)
         
         # Create database instance
-        db = GambixStrataDatabase()
+        global db
         projects = db.get_user_projects(user_data['user_id'])
         
         # Transform projects to match frontend expectations
@@ -975,7 +980,7 @@ def get_user_projects():
 def get_project(project_id):
     """Get a single project by ID"""
     try:
-        db = GambixStrataDatabase()
+        global db
         project = db.get_project(project_id)
         
         if not project:
@@ -1000,7 +1005,7 @@ def delete_project(project_id):
         user_data = ensure_user_exists(email, request.current_user)
         
         # Create database instance
-        db = GambixStrataDatabase()
+        global db
         # Get the project to verify ownership
         project = db.get_project(project_id)
         if not project:
@@ -1034,7 +1039,7 @@ def add_site_health(project_id):
         if not data:
             return jsonify({'success': False, 'error': 'No JSON data provided'}), 400
         
-        db = GambixStrataDatabase()
+        global db
         health_id = db.add_site_health(project_id, data)
         
         return jsonify({
@@ -1050,7 +1055,7 @@ def add_site_health(project_id):
 def get_site_health(project_id):
     """Get site health data"""
     try:
-        db = GambixStrataDatabase()
+        global db
         health_data = db.get_latest_site_health(project_id)
         
         if not health_data:
@@ -1069,7 +1074,7 @@ def get_site_health(project_id):
 def get_project_scraped_data(project_id):
     """Get scraped data for a specific project from files"""
     try:
-        db = GambixStrataDatabase()
+        global db
         
         # Get project to verify ownership
         project = db.get_project(project_id)
@@ -1182,7 +1187,7 @@ def add_page(project_id):
         if not data:
             return jsonify({'success': False, 'error': 'No JSON data provided'}), 400
         
-        db = GambixStrataDatabase()
+        global db
         page_id = db.add_page(project_id, data)
         
         return jsonify({
@@ -1198,7 +1203,7 @@ def add_page(project_id):
 def get_project_pages(project_id):
     """Get all pages for a project"""
     try:
-        db = GambixStrataDatabase()
+        global db
         pages = db.get_project_pages(project_id)
         
         return jsonify({
@@ -1218,7 +1223,7 @@ def add_recommendation(project_id):
         if not data:
             return jsonify({'success': False, 'error': 'No JSON data provided'}), 400
         
-        db = GambixStrataDatabase()
+        global db
         recommendation_id = db.add_recommendation(project_id, data)
         
         return jsonify({
@@ -1235,7 +1240,7 @@ def get_project_recommendations(project_id):
     """Get recommendations for a project"""
     try:
         status = request.args.get('status', 'pending')
-        db = GambixStrataDatabase()
+        global db
         recommendations = db.get_project_recommendations(project_id, status)
         
         return jsonify({
@@ -1258,7 +1263,7 @@ def update_recommendation_status(recommendation_id):
         if not status:
             return jsonify({'success': False, 'error': 'Status is required'}), 400
         
-        db = GambixStrataDatabase()
+        global db
         db.update_recommendation_status(recommendation_id, status)
         
         return jsonify({
@@ -1291,7 +1296,7 @@ def create_alert():
         if not user_id or not alert_data['title'] or not alert_data['description']:
             return jsonify({'success': False, 'error': 'User ID, title, and description are required'}), 400
         
-        db = GambixStrataDatabase()
+        global db
         alert_id = db.create_alert(user_id, alert_data)
         
         return jsonify({
@@ -1308,7 +1313,7 @@ def get_user_alerts(user_id):
     """Get alerts for a user"""
     try:
         status = request.args.get('status', 'active')
-        db = GambixStrataDatabase()
+        global db
         alerts = db.get_user_alerts(user_id, status)
         
         return jsonify({
@@ -1323,7 +1328,7 @@ def get_user_alerts(user_id):
 def dismiss_alert(alert_id):
     """Dismiss an alert"""
     try:
-        db = GambixStrataDatabase()
+        global db
         db.dismiss_alert(alert_id)
         
         return jsonify({
@@ -1338,7 +1343,7 @@ def dismiss_alert(alert_id):
 def get_project_statistics(project_id):
     """Get comprehensive statistics for a project"""
     try:
-        db = GambixStrataDatabase()
+        global db
         stats = db.get_project_statistics(project_id)
         
         if not stats:
@@ -1364,7 +1369,7 @@ def get_dashboard_data():
         user_data = ensure_user_exists(email, request.current_user)
         
         # Create database instance
-        db = GambixStrataDatabase()
+        global db
         dashboard_data = db.get_dashboard_data(user_data['user_id'])
         
         return jsonify({
@@ -1379,7 +1384,7 @@ def get_dashboard_data():
 def get_dashboard_data_legacy(user_id):
     """Get dashboard data for a user (legacy endpoint)"""
     try:
-        db = GambixStrataDatabase()
+        global db
         dashboard_data = db.get_dashboard_data(user_id)
         
         return jsonify({
@@ -1395,7 +1400,7 @@ def get_dashboard_data_legacy(user_id):
 def debug_project_files(project_id):
     """Debug endpoint to check project file paths and existence"""
     try:
-        db = GambixStrataDatabase()
+        global db
         
         # Get project
         project = db.get_project(project_id)
@@ -1463,7 +1468,7 @@ def debug_project_files(project_id):
 def rescrape_project(project_id):
     """Re-scrape a project if files are missing"""
     try:
-        db = GambixStrataDatabase()
+        global db
         
         # Get project to verify ownership
         project = db.get_project(project_id)
