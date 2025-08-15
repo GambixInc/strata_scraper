@@ -7,9 +7,13 @@ echo "========================================"
 export AWS_REGION=us-east-1
 export S3_BUCKET_NAME=gambix-strata-production
 export DYNAMODB_TABLE_PREFIX=gambix_strata_
-export DEBUG=false
+export DEBUG=true
 export PORT=8080
 export HOST=0.0.0.0
+
+# Set additional environment variables
+export S3_ENDPOINT_URL=https://s3.amazonaws.com
+export ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000
 
 # Ensure AWS region is set for all AWS services
 echo "🔧 Setting AWS region: $AWS_REGION"
