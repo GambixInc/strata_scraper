@@ -12,7 +12,7 @@ try:
     
     # Test database imports
     from database_config import Database, GambixStrataDatabase
-print(f"   ✅ Database imports OK (DynamoDB only)")
+    print(f"   ✅ Database imports OK (DynamoDB only)")
     
     # Test S3 storage imports
     try:

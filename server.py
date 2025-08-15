@@ -887,7 +887,7 @@ def create_project():
         # Create database instance
         global db
         try:
-        project_id = db.create_project(user_id, domain, name, settings)
+            project_id = db.create_project(user_id, domain, name, settings)
             if not project_id:
                 return jsonify({'success': False, 'error': 'Failed to create project in database'}), 500
         except Exception as db_error:
