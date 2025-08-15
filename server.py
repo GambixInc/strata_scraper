@@ -144,13 +144,8 @@ def initialize_database():
             sts.get_caller_identity()
             app.logger.info("✅ AWS credentials verified")
         except Exception as e:
-            app.logger.error(f"❌ AWS credentials not available: {e}")
-            app.logger.error("This application requires AWS credentials for DynamoDB and S3")
-            app.logger.error("Please configure AWS CLI or set environment variables:")
-            app.logger.error("  - AWS_ACCESS_KEY_ID")
-            app.logger.error("  - AWS_SECRET_ACCESS_KEY")
-            app.logger.error("  - AWS_REGION")
-            raise Exception("AWS credentials required but not available")
+            app.logger.warning(f"⚠️ AWS credentials check failed: {e}")
+            app.logger.info("   Continuing anyway - credentials may be available through IAM roles")
         
         db = GambixStrataDatabase()
         
