@@ -1175,17 +1175,6 @@ def get_project_scraped_data(project_id):
         
         # Read scraped data from S3 only
         try:
-            # Only handle S3 paths - no local file support
-            # if not scraped_files_path.startswith('s3://'):
-            #     app.logger.error(f"Invalid path format - only S3 paths supported: {scraped_files_path}")
-            return jsonify({
-                'success': True,
-                'data': {
-                    'has_scraped_data': False,
-                    'message': 'Invalid path format - only S3 paths supported'
-                }
-            })
-            
             # S3 storage - use direct functions to read files
             app.logger.info(f"Reading scraped data from S3: {scraped_files_path}")
             
