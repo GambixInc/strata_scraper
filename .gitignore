@@ -296,6 +296,13 @@ yarn-error.log*
 local/
 strata_design/
 
+# LocalStack development environment
+localstack/
+LOCALSTACK_README.md
+run_localstack.sh
+load_localstack_env.sh
+test_localstack_integration.sh
+
 # Test coverage
 .coverage
 htmlcov/
