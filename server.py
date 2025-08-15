@@ -753,7 +753,7 @@ def list_scraped_sites():
 @app.route('/api/report/<site>/<report_type>', methods=['GET'])
 def get_report(site, report_type):
     """Serve a specific report file for a scraped site."""
-    scraped_dir = os.path.join('scraped_sites', site)
+    scraped_dir = f"s3://{S3Storage().bucket_name}/scraped_sites/{site}"
     
     # Map report types to actual files
     if report_type == 'analysis':
