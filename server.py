@@ -61,22 +61,13 @@ DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 app = Flask(__name__)
 
-# Configure CORS based on environment
-if DEBUG:
-    # Allow all origins in development
-    CORS(app)
-else:
-    # Restrict CORS in production
-    allowed_origins = os.getenv('ALLOWED_ORIGINS', '').split(',')
-    if allowed_origins and allowed_origins[0]:
-        CORS(app, origins=allowed_origins)
-    else:
-        # Default to common production origins
-        CORS(app, origins=[
-            'https://strata.cx',
-            'https://main.d18ltg4bq86sg1.amplifyapp.com',
-            'https://*.amplifyapp.com'
-        ])
+# Configure CORS to allow all origins, supports credentials, and specific headers
+CORS(app, 
+     origins="*", 
+     supports_credentials=True, 
+     allow_headers=['Content-Type', 'Authorization'], 
+     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+)
 
 # Add rate limiting
 if DEBUG:
@@ -700,11 +691,10 @@ def list_files():
         
         # List scraped files from S3 only
         try:
-            from s3_storage import S3Storage
-            s3_storage = S3Storage()
+            from s3_storage import list_files_in_s3, get_s3_client
             
             # List all files in the scraped_sites prefix
-            all_files = s3_storage.list_files_in_prefix('scraped_sites/')
+            all_files = list_files_in_s3('scraped_sites/')
             
             # Group files by directory
             directories = {}
@@ -717,10 +707,11 @@ def list_files():
                     directories[dir_name].append(file_key)
             
             # Create scraped files list
+            _, bucket_name = get_s3_client()
             for dir_name, files in directories.items():
                 scraped_files.append({
                     'name': dir_name,
-                    'path': f"s3://{s3_storage.bucket_name}/scraped_sites/{dir_name}",
+                    'path': f"s3://{bucket_name}/scraped_sites/{dir_name}",
                     'type': 'scraped',
                     'storage': 's3',
                     'file_count': len(files)
@@ -806,11 +797,10 @@ def list_scraped_sites():
     try:
         # List scraped sites from S3 only
         try:
-            from s3_storage import S3Storage
-            s3_storage = S3Storage()
+            from s3_storage import list_files_in_s3
             
             # List all files in the scraped_sites prefix
-            all_files = s3_storage.list_files_in_prefix('scraped_sites/')
+            all_files = list_files_in_s3('scraped_sites/')
             
             # Extract unique directory names
             directories = set()
@@ -838,7 +828,9 @@ def list_scraped_sites():
 @app.route('/api/report/<site>/<report_type>', methods=['GET'])
 def get_report(site, report_type):
     """Serve a specific report file for a scraped site."""
-    scraped_dir = f"s3://{S3Storage().bucket_name}/scraped_sites/{site}"
+    from s3_storage import get_s3_client
+    _, bucket_name = get_s3_client()
+    scraped_dir = f"s3://{bucket_name}/scraped_sites/{site}"
     
     # Map report types to actual files
     if report_type == 'analysis':
@@ -947,6 +939,43 @@ def get_user_by_email(email):
     except Exception as e:
         app.logger.error(f"Error getting user: {e}")
         return jsonify({'success': False, 'error': 'Failed to get user'}), 500
+
+@app.route('/api/gambix/users/<email>/duplicates', methods=['GET'])
+def get_duplicate_users(email):
+    """Get all users with the same email (for finding duplicates)"""
+    try:
+        global db
+        users = db.get_all_users_by_email(email)
+        
+        if not users:
+            return jsonify({'success': False, 'error': 'No users found with this email'}), 404
+        
+        return jsonify({
+            'success': True,
+            'users': users,
+            'count': len(users)
+        })
+    except Exception as e:
+        app.logger.error(f"Error getting duplicate users: {e}")
+        return jsonify({'success': False, 'error': 'Failed to get duplicate users'}), 500
+
+@app.route('/api/gambix/users/<user_id>', methods=['DELETE'])
+def delete_user(user_id):
+    """Delete a user by ID (for cleaning up duplicates)"""
+    try:
+        global db
+        success = db.delete_user(user_id)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'User {user_id} deleted successfully'
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Failed to delete user'}), 500
+    except Exception as e:
+        app.logger.error(f"Error deleting user: {e}")
+        return jsonify({'success': False, 'error': 'Failed to delete user'}), 500
 
 @app.route('/api/projects', methods=['POST'])
 @require_auth
@@ -1231,59 +1260,30 @@ def get_project_scraped_data(project_id):
         
         # Read scraped data from S3 only
         try:
-            # Only handle S3 paths - no local file support
-            # if not scraped_files_path.startswith('s3://'):
-            #     app.logger.error(f"Invalid path format - only S3 paths supported: {scraped_files_path}")
-            return jsonify({
-                'success': True,
-                'data': {
-                    'has_scraped_data': False,
-                    'message': 'Invalid path format - only S3 paths supported'
-                }
-            })
-            
-            # S3 storage - use S3Storage to read files
-            app.logger.info(f"Reading scraped data from S3: {scraped_files_path}")
-            
-            # Initialize S3 storage
+            # Use S3Storage class for all S3 operations - best practice
             from s3_storage import S3Storage
             s3_storage = S3Storage()
             
-            # Parse S3 path to get the key
-            s3_key = s3_storage.parse_s3_path(scraped_files_path)
-            if not s3_key:
-                app.logger.error(f"Invalid S3 path format: {scraped_files_path}")
-                return jsonify({
-                    'success': True,
-                    'data': {
-                        'has_scraped_data': False,
-                        'message': 'Invalid S3 path format'
-                    }
-                })
+            app.logger.info(f"Reading scraped data from S3 prefix: {scraped_files_path}")
+            
+            # The scraped_files_path is already the S3 prefix (e.g., "scraped_sites/_bevy.org_20250815_140944_661_928ad93f")
+            s3_prefix = scraped_files_path
             
             # Read metadata.json from S3
-            metadata_key = f"{s3_key}/metadata.json"
-            metadata = {}
-            if s3_storage.file_exists(metadata_key):
-                metadata = s3_storage.read_json_content(metadata_key)
-                if metadata:
-                    app.logger.info(f"Successfully read metadata from S3: {metadata_key}")
-                else:
-                    app.logger.warning(f"Failed to read metadata from S3: {metadata_key}")
+            metadata_key = f"{s3_prefix}/metadata.json"
+            metadata = s3_storage.read_json_content(metadata_key) or {}
+            if metadata:
+                app.logger.info(f"Successfully read metadata from S3: {metadata_key}")
             else:
-                app.logger.warning(f"Metadata file not found in S3: {metadata_key}")
+                app.logger.warning(f"Metadata file not found or empty in S3: {metadata_key}")
             
             # Read seo_report.txt from S3
-            seo_report_key = f"{s3_key}/seo_report.txt"
-            seo_report = ""
-            if s3_storage.file_exists(seo_report_key):
-                seo_report = s3_storage.read_file_content(seo_report_key)
-                if seo_report:
-                    app.logger.info(f"Successfully read SEO report from S3: {seo_report_key}")
-                else:
-                    app.logger.warning(f"Failed to read SEO report from S3: {seo_report_key}")
+            seo_report_key = f"{s3_prefix}/seo_report.txt"
+            seo_report = s3_storage.read_file_content(seo_report_key) or ""
+            if seo_report:
+                app.logger.info(f"Successfully read SEO report from S3: {seo_report_key}")
             else:
-                app.logger.warning(f"SEO report file not found in S3: {seo_report_key}")
+                app.logger.warning(f"SEO report file not found or empty in S3: {seo_report_key}")
             
             # Extract key data from metadata
             seo_data = metadata.get('seo_metadata', {})
@@ -1695,18 +1695,6 @@ def rescrape_project(project_id):
     except Exception as e:
         app.logger.error(f"Error re-scraping project: {e}")
         return jsonify({'success': False, 'error': 'Failed to re-scrape project'}), 500
-
-# Serve static files (HTML, CSS, JS) - Must be at the end
-@app.route('/', defaults={'path': ''})
-@app.route('/<path:path>')
-def serve_react_app(path):
-    if path.startswith('api/'):
-        # Let Flask routes handle API requests - return 404 if not handled
-        return jsonify({'error': 'API endpoint not found'}), 404
-    elif path.startswith('strata_design/') or path.startswith('static/'):
-        # Let other routes handle static asset requests
-        return app.send_static_file(path)
-    return send_from_directory('strata_design', 'index.html')
 
 if __name__ == '__main__':
     print("🌐 Starting Gambix Strata Web Scraper Server...")
