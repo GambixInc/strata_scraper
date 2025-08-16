@@ -531,6 +531,51 @@ class DynamoDBDatabase:
             logger.error(f"Error getting user by email: {e}")
             return None
     
+    def get_users_by_cognito_id(self, cognito_user_id: str) -> List[Dict]:
+        """Get users by Cognito user ID (should be unique but check for duplicates)"""
+        try:
+            response = self.users_table.scan(
+                FilterExpression='cognito_user_id = :cognito_user_id',
+                ExpressionAttributeValues={':cognito_user_id': cognito_user_id}
+            )
+            items = response.get('Items', [])
+            
+            # Deserialize preferences for each item
+            for item in items:
+                if 'preferences' in item:
+                    item['preferences'] = self._deserialize_json(item['preferences'])
+            
+            return items
+        except ClientError as e:
+            logger.error(f"Error getting users by cognito_user_id: {e}")
+            return []
+    
+    def get_all_users(self) -> List[Dict]:
+        """Get all users (use sparingly, for debugging)"""
+        try:
+            response = self.users_table.scan()
+            items = response.get('Items', [])
+            
+            # Deserialize preferences for each item
+            for item in items:
+                if 'preferences' in item:
+                    item['preferences'] = self._deserialize_json(item['preferences'])
+            
+            return items
+        except ClientError as e:
+            logger.error(f"Error getting all users: {e}")
+            return []
+    
+    def delete_user(self, user_id: str) -> bool:
+        """Delete a user by ID"""
+        try:
+            self.users_table.delete_item(Key={'user_id': user_id})
+            logger.info(f"Deleted user: {user_id}")
+            return True
+        except ClientError as e:
+            logger.error(f"Error deleting user {user_id}: {e}")
+            return False
+    
     def authenticate_user(self, email: str, password: str) -> Optional[Dict]:
         """Authenticate user with email and password"""
         user = self.get_user_by_email(email)

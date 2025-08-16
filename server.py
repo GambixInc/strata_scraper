@@ -171,27 +171,104 @@ def ensure_user_exists(email, request_user_data):
     """
     global db
     
-    # Try to get user from database first
-    user_data = db.get_user_by_email(email)
+    if not email:
+        raise ValueError("Email is required")
+    
+    if not request_user_data:
+        raise ValueError("User data is required")
+    
+    # Validate required fields in request_user_data
+    required_fields = ['email']
+    for field in required_fields:
+        if field not in request_user_data:
+            raise ValueError(f"Missing required field in user data: {field}")
+    
+    # Ensure email matches
+    if request_user_data.get('email') != email:
+        app.logger.warning(f"Email mismatch: {email} vs {request_user_data.get('email')}")
+        # Use the email from request_user_data as the source of truth
+        email = request_user_data.get('email')
+    
+    # Try to get user from database first by email
+    try:
+        user_data = db.get_user_by_email(email)
+        app.logger.info(f"Database lookup for email {email}: {'Found' if user_data else 'Not found'}")
+    except Exception as db_error:
+        app.logger.error(f"Database error getting user by email: {db_error}")
+        raise Exception(f"Failed to check if user exists: {db_error}")
+    
+    # If not found by email, also check by cognito_user_id to prevent duplicates
+    if not user_data and request_user_data.get('cognito_user_id'):
+        try:
+            # Check if user exists with this cognito_user_id
+            cognito_user_id = request_user_data.get('cognito_user_id')
+            existing_users = db.get_users_by_cognito_id(cognito_user_id)
+            if existing_users:
+                user_data = existing_users[0]  # Use the first one found
+                app.logger.warning(f"Found existing user with cognito_user_id {cognito_user_id} but different email. Using existing user.")
+        except Exception as cognito_lookup_error:
+            app.logger.warning(f"Could not check for existing user by cognito_user_id: {cognito_lookup_error}")
+    
+    # Additional safety check: if we still don't have user_data, check if email exists in any user
+    if not user_data:
+        try:
+            # Scan for any user with this email (in case email-index is not working)
+            all_users = db.get_all_users()
+            for user in all_users:
+                if user.get('email') == email:
+                    user_data = user
+                    app.logger.warning(f"Found existing user with email {email} via scan. Using existing user.")
+                    break
+        except Exception as scan_error:
+            app.logger.warning(f"Could not scan for existing users: {scan_error}")
     
     if not user_data:
         # Create user in database if they don't exist
-        cognito_user_id = request_user_data.get('cognito_user_id')
-        user_name = request_user_data.get('name') or email
-        given_name = request_user_data.get('given_name')
-        family_name = request_user_data.get('family_name')
-        
-        user_id = db.create_user(
-            email=email,
-            name=user_name,
-            cognito_user_id=cognito_user_id,
-            given_name=given_name,
-            family_name=family_name
-        )
-        
-        # Get the newly created user data
-        user_data = db.get_user_by_email(email)
-        app.logger.info(f"Created new user: {email} with ID: {user_id}")
+        try:
+            cognito_user_id = request_user_data.get('cognito_user_id')
+            given_name = request_user_data.get('given_name')
+            family_name = request_user_data.get('family_name')
+            
+            # Construct a proper name instead of using email
+            if given_name and family_name:
+                user_name = f"{given_name} {family_name}"
+            elif given_name:
+                user_name = given_name
+            elif family_name:
+                user_name = family_name
+            else:
+                # Extract name from email as last resort
+                email_parts = email.split('@')[0]
+                user_name = email_parts.replace('.', ' ').title()
+            
+            app.logger.info(f"Creating new user: {email}")
+            app.logger.info(f"  - Cognito User ID: {cognito_user_id}")
+            app.logger.info(f"  - Name: {user_name}")
+            app.logger.info(f"  - Given Name: {given_name}")
+            app.logger.info(f"  - Family Name: {family_name}")
+            app.logger.info(f"  - Full request_user_data: {request_user_data}")
+            
+            user_id = db.create_user(
+                email=email,
+                name=user_name,
+                cognito_user_id=cognito_user_id,
+                given_name=given_name,
+                family_name=family_name
+            )
+            
+            if not user_id:
+                raise Exception("Failed to create user - no user ID returned")
+            
+            # Get the newly created user data
+            user_data = db.get_user_by_email(email)
+            if not user_data:
+                raise Exception("User was created but could not be retrieved")
+                
+            app.logger.info(f"Successfully created new user: {email} with ID: {user_id}")
+            
+        except Exception as create_error:
+            app.logger.error(f"Error creating user {email}: {create_error}")
+            raise Exception(f"Failed to create user: {create_error}")
     
     return user_data
 
@@ -204,7 +281,11 @@ def get_user_profile():
         email = request.current_user['email']
         
         # Ensure user exists in database
-        user_data = ensure_user_exists(email, request.current_user)
+        try:
+            user_data = ensure_user_exists(email, request.current_user)
+        except Exception as user_error:
+            app.logger.error(f"Error ensuring user exists: {user_error}")
+            return jsonify({'success': False, 'error': 'Failed to verify user account'}), 500
         
         if user_data:
             user_data.pop('password_hash', None)  # Remove password hash
@@ -233,7 +314,11 @@ def update_user_profile():
             return jsonify({'success': False, 'error': 'No JSON data provided'}), 400
         
         # Ensure user exists in database
-        user_data = ensure_user_exists(email, request.current_user)
+        try:
+            user_data = ensure_user_exists(email, request.current_user)
+        except Exception as user_error:
+            app.logger.error(f"Error ensuring user exists: {user_error}")
+            return jsonify({'success': False, 'error': 'Failed to verify user account'}), 500
         
         # Use global database instance
         global db

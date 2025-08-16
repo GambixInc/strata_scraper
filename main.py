@@ -1164,18 +1164,18 @@ if __name__ == "__main__":
             print("📊 Data ready for database storage via API")
             
             # Save analysis results to S3
-            try:
-                s3_storage = S3Storage()
-                analysis_key = f"{saved_location}/content_analysis.json"
-                if s3_storage.upload_json_content(analysis_results, analysis_key):
-                    print(f"📊 Content analysis saved to S3: {analysis_key}")
-                
-                if seo_data.get('detailed_analytics'):
-                    analytics_key = f"{saved_location}/analytics_data.json"
-                    if s3_storage.upload_json_content(seo_data['detailed_analytics'], analytics_key):
-                        print(f"📈 Analytics data saved to S3: {analytics_key}")
-            except Exception as e:
-                print(f"⚠️ Failed to save analysis files to S3: {e}")
+                try:
+                    s3_storage = S3Storage()
+                    analysis_key = f"{saved_location}/content_analysis.json"
+                    if s3_storage.upload_json_content(analysis_results, analysis_key):
+                        print(f"📊 Content analysis saved to S3: {analysis_key}")
+                    
+                    if seo_data.get('detailed_analytics'):
+                        analytics_key = f"{saved_location}/analytics_data.json"
+                        if s3_storage.upload_json_content(seo_data['detailed_analytics'], analytics_key):
+                            print(f"📈 Analytics data saved to S3: {analytics_key}")
+                except Exception as e:
+                    print(f"⚠️ Failed to save analysis files to S3: {e}")
         
         # Print a quick summary of key findings
         print(f"\n🔍 QUICK SUMMARY")
