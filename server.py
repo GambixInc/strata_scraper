@@ -890,6 +890,119 @@ def get_report(site, report_type):
     else:
         return jsonify({'error': 'Invalid report type'}), 400
 
+@app.route('/api/report/<site>/seo.csv', methods=['GET'])
+def get_seo_csv(site):
+    """Generate and serve an SEO CSV report for a scraped site."""
+    try:
+        from s3_storage import S3Storage
+        import csv
+        from io import StringIO
+        
+        s3_storage = S3Storage()
+        
+        # Read metadata.json from S3
+        metadata_key = f"scraped_sites/{site}/metadata.json"
+        metadata = s3_storage.read_json_content(metadata_key)
+        
+        if not metadata:
+            return jsonify({'error': 'Site metadata not found'}), 404
+        
+        seo_data = metadata.get('seo_metadata', {})
+        
+        # Create CSV content
+        csv_buffer = StringIO()
+        csv_writer = csv.writer(csv_buffer)
+        
+        # Write header
+        csv_writer.writerow([
+            'Metric', 'Value', 'Category'
+        ])
+        
+        # Basic SEO metrics
+        csv_writer.writerow(['URL', metadata.get('original_url', ''), 'Basic Info'])
+        csv_writer.writerow(['Title', metadata.get('title', ''), 'Basic Info'])
+        csv_writer.writerow(['Scraped At', metadata.get('scraped_at', ''), 'Basic Info'])
+        csv_writer.writerow(['Word Count', seo_data.get('word_count', 0), 'Content'])
+        csv_writer.writerow(['Meta Description', seo_data.get('meta_description', ''), 'Meta Tags'])
+        csv_writer.writerow(['Canonical URL', seo_data.get('canonical_url', ''), 'Meta Tags'])
+        csv_writer.writerow(['Robots Directive', seo_data.get('robots_directive', ''), 'Meta Tags'])
+        csv_writer.writerow(['Language', seo_data.get('language', ''), 'Meta Tags'])
+        csv_writer.writerow(['Charset', seo_data.get('charset', ''), 'Meta Tags'])
+        csv_writer.writerow(['Viewport', seo_data.get('viewport', ''), 'Meta Tags'])
+        csv_writer.writerow(['Favicon', seo_data.get('favicon', ''), 'Meta Tags'])
+        csv_writer.writerow(['Sitemap', seo_data.get('sitemap', ''), 'Meta Tags'])
+        
+        # Headings
+        headings = seo_data.get('headings', {})
+        for level in range(1, 7):
+            h_count = len(headings.get(f'h{level}', []))
+            csv_writer.writerow([f'H{level} Count', h_count, 'Headings'])
+        
+        # Images
+        images = seo_data.get('images', [])
+        images_with_alt = len([img for img in images if img.get('alt')])
+        images_without_alt = len(images) - images_with_alt
+        csv_writer.writerow(['Total Images', len(images), 'Images'])
+        csv_writer.writerow(['Images with Alt Text', images_with_alt, 'Images'])
+        csv_writer.writerow(['Images without Alt Text', images_without_alt, 'Images'])
+        csv_writer.writerow(['Alt Text Coverage %', round((images_with_alt / len(images) * 100) if images else 0, 2), 'Images'])
+        
+        # Links
+        internal_links = seo_data.get('internal_links', [])
+        external_links = seo_data.get('external_links', [])
+        social_links = seo_data.get('social_links', [])
+        csv_writer.writerow(['Internal Links', len(internal_links), 'Links'])
+        csv_writer.writerow(['External Links', len(external_links), 'Links'])
+        csv_writer.writerow(['Social Links', len(social_links), 'Links'])
+        csv_writer.writerow(['Total Links', len(internal_links) + len(external_links), 'Links'])
+        
+        # Open Graph tags
+        open_graph = seo_data.get('open_graph', {})
+        for og_tag, value in open_graph.items():
+            csv_writer.writerow([f'OG: {og_tag}', value, 'Open Graph'])
+        
+        # Twitter Card tags
+        twitter_cards = seo_data.get('twitter_cards', {})
+        for tw_tag, value in twitter_cards.items():
+            csv_writer.writerow([f'Twitter: {tw_tag}', value, 'Twitter Cards'])
+        
+        # Structured Data
+        structured_data = seo_data.get('structured_data', [])
+        csv_writer.writerow(['Structured Data Blocks', len(structured_data), 'Structured Data'])
+        
+        # Analytics
+        analytics = seo_data.get('analytics', [])
+        csv_writer.writerow(['Analytics Tools', len(analytics), 'Analytics'])
+        
+        # RSS Feeds
+        rss_feeds = seo_data.get('rss_feeds', [])
+        csv_writer.writerow(['RSS Feeds', len(rss_feeds), 'Feeds'])
+        
+        # Page Speed Indicators
+        speed_indicators = seo_data.get('page_speed_indicators', {})
+        for indicator, value in speed_indicators.items():
+            csv_writer.writerow([f'Speed: {indicator}', value, 'Performance'])
+        
+        # Top Keywords (limited to top 10)
+        keyword_density = seo_data.get('keyword_density', {})
+        for i, (keyword, count) in enumerate(list(keyword_density.items())[:10], 1):
+            csv_writer.writerow([f'Keyword {i}', f'{keyword} ({count})', 'Keywords'])
+        
+        # Get CSV content
+        csv_content = csv_buffer.getvalue()
+        csv_buffer.close()
+        
+        # Return CSV as downloadable file
+        from flask import Response
+        return Response(
+            csv_content,
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename=seo_report_{site}.csv'}
+        )
+        
+    except Exception as e:
+        app.logger.error(f"Error generating SEO CSV for site {site}: {e}")
+        return jsonify({'error': f'Failed to generate SEO CSV: {str(e)}'}), 500
 
 
 # Gambix Strata API Endpoints
@@ -1324,6 +1437,152 @@ def get_project_scraped_data(project_id):
         app.logger.error(f"Error getting project scraped data: {e}")
         return jsonify({'success': False, 'error': 'Failed to get project scraped data'}), 500
 
+@app.route('/api/gambix/projects/<project_id>/seo.csv', methods=['GET'])
+@require_auth
+def get_project_seo_csv(project_id):
+    """Generate and serve an SEO CSV report for a specific project."""
+    try:
+        global db
+        
+        # Get project to verify ownership
+        project = db.get_project(project_id)
+        if not project:
+            return jsonify({'success': False, 'error': 'Project not found'}), 404
+        
+        # Verify project belongs to current user
+        email = request.current_user['email']
+        user_data = ensure_user_exists(email, request.current_user)
+        if project['user_id'] != user_data['user_id']:
+            return jsonify({'success': False, 'error': 'Access denied'}), 403
+        
+        # Check if project has scraped files
+        scraped_files_path = project.get('scraped_files_path')
+        if not scraped_files_path:
+            return jsonify({'success': False, 'error': 'No scraped data available for this project'}), 404
+        
+        # Read scraped data from S3
+        try:
+            from s3_storage import S3Storage
+            import csv
+            from io import StringIO
+            
+            s3_storage = S3Storage()
+            
+            # Read metadata.json from S3
+            metadata_key = f"{scraped_files_path}/metadata.json"
+            metadata = s3_storage.read_json_content(metadata_key)
+            
+            if not metadata:
+                return jsonify({'error': 'Project metadata not found'}), 404
+            
+            seo_data = metadata.get('seo_metadata', {})
+            
+            # Create CSV content
+            csv_buffer = StringIO()
+            csv_writer = csv.writer(csv_buffer)
+            
+            # Write header
+            csv_writer.writerow([
+                'Metric', 'Value', 'Category'
+            ])
+            
+            # Project info
+            csv_writer.writerow(['Project ID', project_id, 'Project Info'])
+            csv_writer.writerow(['Project Name', project.get('name', ''), 'Project Info'])
+            csv_writer.writerow(['Domain', project.get('domain', ''), 'Project Info'])
+            csv_writer.writerow(['URL', metadata.get('original_url', ''), 'Basic Info'])
+            csv_writer.writerow(['Title', metadata.get('title', ''), 'Basic Info'])
+            csv_writer.writerow(['Scraped At', metadata.get('scraped_at', ''), 'Basic Info'])
+            csv_writer.writerow(['Word Count', seo_data.get('word_count', 0), 'Content'])
+            csv_writer.writerow(['Meta Description', seo_data.get('meta_description', ''), 'Meta Tags'])
+            csv_writer.writerow(['Canonical URL', seo_data.get('canonical_url', ''), 'Meta Tags'])
+            csv_writer.writerow(['Robots Directive', seo_data.get('robots_directive', ''), 'Meta Tags'])
+            csv_writer.writerow(['Language', seo_data.get('language', ''), 'Meta Tags'])
+            csv_writer.writerow(['Charset', seo_data.get('charset', ''), 'Meta Tags'])
+            csv_writer.writerow(['Viewport', seo_data.get('viewport', ''), 'Meta Tags'])
+            csv_writer.writerow(['Favicon', seo_data.get('favicon', ''), 'Meta Tags'])
+            csv_writer.writerow(['Sitemap', seo_data.get('sitemap', ''), 'Meta Tags'])
+            
+            # Headings
+            headings = seo_data.get('headings', {})
+            for level in range(1, 7):
+                h_count = len(headings.get(f'h{level}', []))
+                csv_writer.writerow([f'H{level} Count', h_count, 'Headings'])
+            
+            # Images
+            images = seo_data.get('images', [])
+            images_with_alt = len([img for img in images if img.get('alt')])
+            images_without_alt = len(images) - images_with_alt
+            csv_writer.writerow(['Total Images', len(images), 'Images'])
+            csv_writer.writerow(['Images with Alt Text', images_with_alt, 'Images'])
+            csv_writer.writerow(['Images without Alt Text', images_without_alt, 'Images'])
+            csv_writer.writerow(['Alt Text Coverage %', round((images_with_alt / len(images) * 100) if images else 0, 2), 'Images'])
+            
+            # Links
+            internal_links = seo_data.get('internal_links', [])
+            external_links = seo_data.get('external_links', [])
+            social_links = seo_data.get('social_links', [])
+            csv_writer.writerow(['Internal Links', len(internal_links), 'Links'])
+            csv_writer.writerow(['External Links', len(external_links), 'Links'])
+            csv_writer.writerow(['Social Links', len(social_links), 'Links'])
+            csv_writer.writerow(['Total Links', len(internal_links) + len(external_links), 'Links'])
+            
+            # Open Graph tags
+            open_graph = seo_data.get('open_graph', {})
+            for og_tag, value in open_graph.items():
+                csv_writer.writerow([f'OG: {og_tag}', value, 'Open Graph'])
+            
+            # Twitter Card tags
+            twitter_cards = seo_data.get('twitter_cards', {})
+            for tw_tag, value in twitter_cards.items():
+                csv_writer.writerow([f'Twitter: {tw_tag}', value, 'Twitter Cards'])
+            
+            # Structured Data
+            structured_data = seo_data.get('structured_data', [])
+            csv_writer.writerow(['Structured Data Blocks', len(structured_data), 'Structured Data'])
+            
+            # Analytics
+            analytics = seo_data.get('analytics', [])
+            csv_writer.writerow(['Analytics Tools', len(analytics), 'Analytics'])
+            
+            # RSS Feeds
+            rss_feeds = seo_data.get('rss_feeds', [])
+            csv_writer.writerow(['RSS Feeds', len(rss_feeds), 'Feeds'])
+            
+            # Page Speed Indicators
+            speed_indicators = seo_data.get('page_speed_indicators', {})
+            for indicator, value in speed_indicators.items():
+                csv_writer.writerow([f'Speed: {indicator}', value, 'Performance'])
+            
+            # Top Keywords (limited to top 10)
+            keyword_density = seo_data.get('keyword_density', {})
+            for i, (keyword, count) in enumerate(list(keyword_density.items())[:10], 1):
+                csv_writer.writerow([f'Keyword {i}', f'{keyword} ({count})', 'Keywords'])
+            
+            # Get CSV content
+            csv_content = csv_buffer.getvalue()
+            csv_buffer.close()
+            
+            # Return CSV as downloadable file
+            from flask import Response
+            project_name = project.get('name', project.get('domain', 'project'))
+            safe_name = "".join(c for c in project_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            filename = f"seo_report_{safe_name}_{project_id}.csv"
+            
+            return Response(
+                csv_content,
+                mimetype='text/csv',
+                headers={'Content-Disposition': f'attachment; filename={filename}'}
+            )
+            
+        except Exception as file_error:
+            app.logger.error(f"Error generating CSV for project {project_id}: {file_error}")
+            return jsonify({'success': False, 'error': f'Failed to generate CSV: {str(file_error)}'}), 500
+        
+    except Exception as e:
+        app.logger.error(f"Error getting project SEO CSV: {e}")
+        return jsonify({'success': False, 'error': 'Failed to get project SEO CSV'}), 500
+
 @app.route('/api/gambix/projects/<project_id>/pages', methods=['POST'])
 # @limiter.limit("10 per minute")  # Temporarily disabled
 def add_page(project_id):
@@ -1705,6 +1964,8 @@ if __name__ == '__main__':
     print(f"📊 Tracker stats: http://{HOST}:{PORT}/api/tracker/stats")
     print(f"📋 Tracker summary: http://{HOST}:{PORT}/api/tracker/summary")
     print(f"💚 Health check: http://{HOST}:{PORT}/api/health")
+    print(f"📄 Report endpoints: http://{HOST}:{PORT}/api/report/<site>/<type>")
+    print(f"📊 SEO CSV: http://{HOST}:{PORT}/api/report/<site>/seo.csv")
     print(f"\n🎯 Gambix Strata API Endpoints:")
     print(f"   - Users: http://{HOST}:{PORT}/api/gambix/users")
     print(f"   - Projects: http://{HOST}:{PORT}/api/gambix/projects")
@@ -1713,6 +1974,7 @@ if __name__ == '__main__':
     print(f"   - Recommendations: http://{HOST}:{PORT}/api/gambix/projects/<id>/recommendations")
     print(f"   - Alerts: http://{HOST}:{PORT}/api/gambix/alerts")
     print(f"   - Dashboard: http://{HOST}:{PORT}/api/gambix/dashboard/<user_id>")
+    print(f"   - SEO CSV: http://{HOST}:{PORT}/api/gambix/projects/<id>/seo.csv")
     print(f"\n📂 Storage Configuration:")
     print("   - Database: DynamoDB (gambix_strata_* tables)")
     print("   - Storage: S3 bucket (gambix-strata-production)")
